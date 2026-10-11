@@ -449,7 +449,7 @@ func (app *application) callAddDeviceContext(parent context.Context, udid, ip st
 	}
 	if app.usesUSBMuxd2WiFi() {
 		app.addWarnLog(udid, fmt.Sprintf("event=network.manual_ip_unsupported usbmuxd2 Wi-Fi uses local mDNS discovery; ignoring ip=%s", ip))
-		return i18n.NewError("api.manual_ip_unsupported", nil)
+		return i18n.NewError(i18n.ManualIPUnsupported, nil)
 	}
 	app.mu.Lock()
 	if err := app.deviceRemovalBlockedUnsafe(udid); err != nil {
@@ -485,7 +485,7 @@ func (app *application) callAddDeviceContext(parent context.Context, udid, ip st
 	}
 	if ok, reason := probe(ip); !ok {
 		app.addWarnLog(udid, fmt.Sprintf("event=network.ip_unreachable Skipping add_device ip=%s detail=%s", ip, reason))
-		return operationError("api.ip_connection_failed", nil, reason)
+		return operationError(i18n.IPConnectionFailed, nil, reason)
 	}
 	// 已注册设备重复添加可能触发 helper panic。
 	result := app.scanConnection(ctx, connectionWiFi, false)
@@ -527,7 +527,7 @@ func (app *application) callAddDeviceContext(parent context.Context, udid, ip st
 
 	if err != nil {
 		app.addWarnLog(udid, fmt.Sprintf("event=network.registration_failed ip=%s error=%v output=%q", ip, err, output))
-		return i18n.NewError("api.ip_device_offline", nil)
+		return i18n.NewError(i18n.IPDeviceOffline, nil)
 	}
 
 	switch {
@@ -537,10 +537,10 @@ func (app *application) callAddDeviceContext(parent context.Context, udid, ip st
 		return nil
 	case strings.Contains(output, "Failure"):
 		app.addWarnLog(udid, fmt.Sprintf("event=network.registration_rejected Device remains unregistered ip=%s", ip))
-		return i18n.NewError("api.ip_device_offline", nil)
+		return i18n.NewError(i18n.IPDeviceOffline, nil)
 	default:
 		app.addWarnLog(udid, fmt.Sprintf("event=network.registration_unconfirmed ip=%s output=%q", ip, output))
-		return i18n.NewError("api.ip_device_offline", nil)
+		return i18n.NewError(i18n.IPDeviceOffline, nil)
 	}
 }
 

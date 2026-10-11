@@ -77,7 +77,7 @@ func newNotificationHTTPClientPolicy(allowPrivate []netip.Prefix, allowUnsafe bo
 func validateOutboundIP(address netip.Addr, allowPrivate []netip.Prefix) error {
 	address = address.Unmap()
 	if address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() || address.IsLinkLocalUnicast() || address.IsLinkLocalMulticast() {
-		return i18n.NewError("api.notification_target_disallowed", nil)
+		return i18n.NewError(i18n.NotificationTargetDisallowed, nil)
 	}
 	if address.IsPrivate() {
 		for _, prefix := range allowPrivate {
@@ -85,7 +85,7 @@ func validateOutboundIP(address netip.Addr, allowPrivate []netip.Prefix) error {
 				return nil
 			}
 		}
-		return i18n.NewError("api.notification_private_target_unlisted", nil)
+		return i18n.NewError(i18n.NotificationPrivateTargetUnlisted, nil)
 	}
 	return nil
 }
@@ -93,15 +93,15 @@ func validateOutboundIP(address netip.Addr, allowPrivate []netip.Prefix) error {
 func validateOutboundURL(rawURL string, allowPrivate []netip.Prefix, allowUnsafe bool) error {
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Hostname() == "" || parsed.User != nil {
-		return i18n.NewError("api.notification_url_invalid", nil)
+		return i18n.NewError(i18n.NotificationURLInvalid, nil)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return i18n.NewError("api.notification_url_invalid", nil)
+		return i18n.NewError(i18n.NotificationURLInvalid, nil)
 	}
 	if parsed.Scheme != "https" && !allowUnsafe {
 		address, parseErr := netip.ParseAddr(parsed.Hostname())
 		if parseErr != nil || !address.Unmap().IsPrivate() {
-			return i18n.NewError("api.notification_public_url_https", nil)
+			return i18n.NewError(i18n.NotificationPublicURLHTTPS, nil)
 		}
 	}
 	if allowUnsafe {
@@ -148,10 +148,10 @@ func (notifier *TelegramNotifier) GetName() string {
 func (notifier *TelegramNotifier) IsEnabled() bool { return notifier.config.Enabled }
 func (notifier *TelegramNotifier) Validate() error {
 	if notifier.config.BotToken == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "Telegram", "field": "bot_token"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "Telegram", "field": "bot_token"})
 	}
 	if notifier.config.ChatID == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "Telegram", "field": "chat_id"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "Telegram", "field": "chat_id"})
 	}
 	return nil
 }
@@ -246,27 +246,27 @@ func (notifier *EmailNotifier) GetName() string {
 func (notifier *EmailNotifier) IsEnabled() bool { return notifier.config.Enabled }
 func (notifier *EmailNotifier) Validate() error {
 	if notifier.config.SMTPHost == "" || strings.ContainsAny(notifier.config.SMTPHost, "\r\n\x00") {
-		return i18n.NewError("api.notification_smtp_host", nil)
+		return i18n.NewError(i18n.NotificationSMTPHost, nil)
 	}
 	if notifier.config.SMTPPort <= 0 || notifier.config.SMTPPort > 65535 {
-		return i18n.NewError("api.notification_smtp_port", nil)
+		return i18n.NewError(i18n.NotificationSMTPPort, nil)
 	}
 	if notifier.config.Username == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "Email", "field": "username"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "Email", "field": "username"})
 	}
 	if notifier.config.Password == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "Email", "field": "password"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "Email", "field": "password"})
 	}
 	if notifier.config.From == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "Email", "field": "from"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "Email", "field": "from"})
 	}
 	if notifier.config.To == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "Email", "field": "to"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "Email", "field": "to"})
 	}
 	for field, address := range map[string]string{"from": notifier.config.From, "to": notifier.config.To} {
 		parsed, err := mail.ParseAddress(address)
 		if err != nil || parsed.Address != strings.TrimSpace(address) || strings.ContainsAny(address, "\r\n") {
-			return i18n.NewError("api.notification_email_address", map[string]any{"field": field})
+			return i18n.NewError(i18n.NotificationEmailAddress, map[string]any{"field": field})
 		}
 	}
 	return nil
@@ -315,14 +315,14 @@ func (notifier *WecomNotifier) GetName() string {
 func (notifier *WecomNotifier) IsEnabled() bool { return notifier.config.Enabled }
 func (notifier *WecomNotifier) Validate() error {
 	if notifier.config.WebhookURL == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "WeCom", "field": "webhook_url"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "WeCom", "field": "webhook_url"})
 	}
 	if !notifier.allowUnsafeTestTarget && !strings.HasPrefix(notifier.config.WebhookURL, "https://") {
-		return i18n.NewError("api.notification_url_https", nil)
+		return i18n.NewError(i18n.NotificationURLHTTPS, nil)
 	}
 	parsed, err := url.Parse(notifier.config.WebhookURL)
 	if err != nil || (!notifier.allowUnsafeTestTarget && !strings.EqualFold(parsed.Hostname(), "qyapi.weixin.qq.com")) {
-		return i18n.NewError("api.notification_wecom_url", nil)
+		return i18n.NewError(i18n.NotificationWeComURL, nil)
 	}
 	return validateOutboundURL(notifier.config.WebhookURL, nil, notifier.allowUnsafeTestTarget)
 }
@@ -379,23 +379,23 @@ func (notifier *BarkNotifier) GetName() string {
 func (notifier *BarkNotifier) IsEnabled() bool { return notifier.config.Enabled }
 func (notifier *BarkNotifier) Validate() error {
 	if notifier.config.ServerURL == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "Bark", "field": "server_url"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "Bark", "field": "server_url"})
 	}
 	if len(notifier.config.ServerURL) > 4096 {
-		return i18n.NewError("api.notification_url_length", map[string]any{"channel": "Bark", "field": "server_url", "max": 4096})
+		return i18n.NewError(i18n.NotificationURLLength, map[string]any{"channel": "Bark", "field": "server_url", "max": 4096})
 	}
 	if notifier.config.DeviceKey == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "Bark", "field": "device_key"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "Bark", "field": "device_key"})
 	}
 	if strings.ContainsAny(notifier.config.DeviceKey, "\r\n") || len(notifier.config.DeviceKey) > 256 {
-		return i18n.NewError("api.notification_bark_key_invalid", nil)
+		return i18n.NewError(i18n.NotificationBarkKeyInvalid, nil)
 	}
 	if err := validateOutboundURL(notifier.config.ServerURL, notifier.allowPrivate, notifier.allowUnsafeTestTarget); err != nil {
 		return err
 	}
 	parsed, err := url.Parse(notifier.config.ServerURL)
 	if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return i18n.NewError("api.notification_bark_url", nil)
+		return i18n.NewError(i18n.NotificationBarkURL, nil)
 	}
 	return nil
 }
@@ -456,10 +456,10 @@ func (notifier *WebhookNotifier) GetName() string {
 func (notifier *WebhookNotifier) IsEnabled() bool { return notifier.config.Enabled }
 func (notifier *WebhookNotifier) Validate() error {
 	if notifier.config.URL == "" {
-		return i18n.NewError("api.notification_field_required", map[string]any{"channel": "Webhook", "field": "url"})
+		return i18n.NewError(i18n.NotificationFieldRequired, map[string]any{"channel": "Webhook", "field": "url"})
 	}
 	if len(notifier.config.URL) > 4096 {
-		return i18n.NewError("api.notification_url_length", map[string]any{"channel": "Webhook", "field": "url", "max": 4096})
+		return i18n.NewError(i18n.NotificationURLLength, map[string]any{"channel": "Webhook", "field": "url", "max": 4096})
 	}
 	if err := validateOutboundURL(notifier.config.URL, notifier.allowPrivate, notifier.allowUnsafeTestTarget); err != nil {
 		return err
@@ -469,14 +469,14 @@ func (notifier *WebhookNotifier) Validate() error {
 		method = http.MethodPost
 	}
 	if method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch {
-		return i18n.NewError("api.notification_webhook_method", nil)
+		return i18n.NewError(i18n.NotificationWebhookMethod, nil)
 	}
 	return validateWebhookHeaders(notifier.config.Headers)
 }
 
 func validateWebhookHeaders(headers map[string]string) error {
 	if len(headers) > 20 {
-		return i18n.NewError("api.notification_webhook_header_count", nil)
+		return i18n.NewError(i18n.NotificationWebhookHeaderCount, nil)
 	}
 	forbidden := map[string]bool{
 		"host": true, "content-length": true, "connection": true, "keep-alive": true,
@@ -488,11 +488,11 @@ func validateWebhookHeaders(headers map[string]string) error {
 		lower := strings.ToLower(name)
 		total += len(name) + len(value)
 		if forbidden[lower] || !validHTTPToken(name) || strings.ContainsAny(value, "\r\n") {
-			return i18n.NewError("api.notification_webhook_header", map[string]any{"header": name})
+			return i18n.NewError(i18n.NotificationWebhookHeader, map[string]any{"header": name})
 		}
 	}
 	if total > 8192 {
-		return i18n.NewError("api.notification_webhook_header_size", nil)
+		return i18n.NewError(i18n.NotificationWebhookHeaderSize, nil)
 	}
 	return nil
 }

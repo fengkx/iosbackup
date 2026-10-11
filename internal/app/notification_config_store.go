@@ -78,7 +78,7 @@ func (s *notificationConfigStore) Public() (*notificationConfig, error) {
 // HTTP 保存路径先用它做完整 notifier 校验，避免“已落盘但实际没有通知器”的假成功。
 func (s *notificationConfigStore) Preview(incoming *notificationConfig) (*notificationConfig, error) {
 	if incoming == nil {
-		return nil, i18n.NewError("api.notification_config_required", nil)
+		return nil, i18n.NewError(i18n.NotificationConfigRequired, nil)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -138,7 +138,7 @@ func previewTelegramSecrets(current, next *notificationConfig) error {
 		}
 		cfg.BotToken, cfg.SecretConfigured = secret, secret != ""
 		if cfg.Enabled && secret == "" {
-			return i18n.NewError("api.notification_secret_required", map[string]any{"channel": "Telegram", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationSecretRequired, map[string]any{"channel": "Telegram", "name": cfg.Name})
 		}
 	}
 	return nil
@@ -158,7 +158,7 @@ func previewBarkSecrets(current, next *notificationConfig) error {
 		}
 		cfg.DeviceKey, cfg.SecretConfigured = secret, secret != ""
 		if cfg.Enabled && secret == "" {
-			return i18n.NewError("api.notification_bark_key_required", map[string]any{"name": cfg.Name})
+			return i18n.NewError(i18n.NotificationBarkKeyRequired, map[string]any{"name": cfg.Name})
 		}
 	}
 	return nil
@@ -177,7 +177,7 @@ func previewEmailSecrets(current, next *notificationConfig) error {
 		}
 		cfg.Password, cfg.SecretConfigured = secret, secret != ""
 		if cfg.Enabled && secret == "" {
-			return i18n.NewError("api.notification_secret_required", map[string]any{"channel": "Email", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationSecretRequired, map[string]any{"channel": "Email", "name": cfg.Name})
 		}
 	}
 	return nil
@@ -197,7 +197,7 @@ func previewWecomSecrets(current, next *notificationConfig) error {
 		}
 		cfg.WebhookURL, cfg.SecretConfigured = secret, secret != ""
 		if cfg.Enabled && secret == "" {
-			return i18n.NewError("api.notification_secret_required", map[string]any{"channel": "WeCom", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationSecretRequired, map[string]any{"channel": "WeCom", "name": cfg.Name})
 		}
 	}
 	return nil
@@ -223,7 +223,7 @@ func previewWebhookSecrets(current, next *notificationConfig) error {
 		}
 		cfg.URL, cfg.SecretConfigured = secret, secret != ""
 		if cfg.Enabled && secret == "" {
-			return i18n.NewError("api.notification_secret_required", map[string]any{"channel": "Webhook", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationSecretRequired, map[string]any{"channel": "Webhook", "name": cfg.Name})
 		}
 	}
 	return nil
@@ -231,19 +231,19 @@ func previewWebhookSecrets(current, next *notificationConfig) error {
 
 func previewSecret(incoming string, replace, clear, oldConfigured bool, oldValue string) (string, error) {
 	if replace && clear {
-		return "", i18n.NewError("api.notification_secret_actions_conflict", nil)
+		return "", i18n.NewError(i18n.NotificationSecretActionsConflict, nil)
 	}
 	if clear {
 		return "", nil
 	}
 	if replace {
 		if incoming == "" {
-			return "", i18n.NewError("api.notification_replacement_secret_required", nil)
+			return "", i18n.NewError(i18n.NotificationReplacementSecretRequired, nil)
 		}
 		return incoming, nil
 	}
 	if incoming != "" {
-		return "", i18n.NewError("api.notification_replace_secret_required", nil)
+		return "", i18n.NewError(i18n.NotificationReplaceSecretRequired, nil)
 	}
 	if oldConfigured {
 		return oldValue, nil
@@ -264,7 +264,7 @@ func cloneStringMap(values map[string]string) map[string]string {
 
 func (s *notificationConfigStore) Save(incoming *notificationConfig) error {
 	if incoming == nil {
-		return i18n.NewError("api.notification_config_required", nil)
+		return i18n.NewError(i18n.NotificationConfigRequired, nil)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -331,7 +331,7 @@ func (s *notificationConfigStore) applyBarkUpdates(current, next *notificationCo
 		seen[cfg.Name] = true
 		old, ok := existing[cfg.Name]
 		if !ok && cfg.SecretConfigured && !cfg.ReplaceSecret && !cfg.ClearSecret {
-			return i18n.NewError("api.notification_renamed_bark_key_required", map[string]any{"name": cfg.Name})
+			return i18n.NewError(i18n.NotificationRenamedBarkKeyRequired, map[string]any{"name": cfg.Name})
 		}
 		configured, err := s.applySecretUpdate(notificationSecretKey("bark", cfg.Name, "device_key"), cfg.DeviceKey, cfg.ReplaceSecret, cfg.ClearSecret, ok && old.SecretConfigured, deletes)
 		if err != nil {
@@ -339,7 +339,7 @@ func (s *notificationConfigStore) applyBarkUpdates(current, next *notificationCo
 		}
 		cfg.SecretConfigured = configured
 		if cfg.Enabled && !configured {
-			return i18n.NewError("api.notification_bark_key_required", map[string]any{"name": cfg.Name})
+			return i18n.NewError(i18n.NotificationBarkKeyRequired, map[string]any{"name": cfg.Name})
 		}
 	}
 	for name, cfg := range existing {
@@ -511,7 +511,7 @@ func (s *notificationConfigStore) applyTelegramUpdates(current, next *notificati
 		seen[cfg.Name] = true
 		old, ok := existing[cfg.Name]
 		if !ok && cfg.SecretConfigured && !cfg.ReplaceSecret && !cfg.ClearSecret {
-			return i18n.NewError("api.notification_renamed_secret_required", map[string]any{"channel": "Telegram", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationRenamedSecretRequired, map[string]any{"channel": "Telegram", "name": cfg.Name})
 		}
 		configured, err := s.applySecretUpdate(notificationSecretKey("telegram", cfg.Name, "token"), cfg.BotToken, cfg.ReplaceSecret, cfg.ClearSecret, ok && old.SecretConfigured, deletes)
 		if err != nil {
@@ -519,7 +519,7 @@ func (s *notificationConfigStore) applyTelegramUpdates(current, next *notificati
 		}
 		cfg.SecretConfigured = configured
 		if cfg.Enabled && !configured {
-			return i18n.NewError("api.notification_secret_required", map[string]any{"channel": "Telegram", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationSecretRequired, map[string]any{"channel": "Telegram", "name": cfg.Name})
 		}
 	}
 	for name, cfg := range existing {
@@ -541,7 +541,7 @@ func (s *notificationConfigStore) applyEmailUpdates(current, next *notificationC
 		seen[cfg.Name] = true
 		old, ok := existing[cfg.Name]
 		if !ok && cfg.SecretConfigured && !cfg.ReplaceSecret && !cfg.ClearSecret {
-			return i18n.NewError("api.notification_renamed_secret_required", map[string]any{"channel": "Email", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationRenamedSecretRequired, map[string]any{"channel": "Email", "name": cfg.Name})
 		}
 		configured, err := s.applySecretUpdate(notificationSecretKey("email", cfg.Name, "password"), cfg.Password, cfg.ReplaceSecret, cfg.ClearSecret, ok && old.SecretConfigured, deletes)
 		if err != nil {
@@ -549,7 +549,7 @@ func (s *notificationConfigStore) applyEmailUpdates(current, next *notificationC
 		}
 		cfg.SecretConfigured = configured
 		if cfg.Enabled && !configured {
-			return i18n.NewError("api.notification_secret_required", map[string]any{"channel": "Email", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationSecretRequired, map[string]any{"channel": "Email", "name": cfg.Name})
 		}
 	}
 	for name, cfg := range existing {
@@ -571,7 +571,7 @@ func (s *notificationConfigStore) applyWecomUpdates(current, next *notificationC
 		seen[cfg.Name] = true
 		old, ok := existing[cfg.Name]
 		if !ok && cfg.SecretConfigured && !cfg.ReplaceSecret && !cfg.ClearSecret {
-			return i18n.NewError("api.notification_renamed_secret_required", map[string]any{"channel": "WeCom", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationRenamedSecretRequired, map[string]any{"channel": "WeCom", "name": cfg.Name})
 		}
 		configured, err := s.applySecretUpdate(notificationSecretKey("wecom", cfg.Name, "url"), cfg.WebhookURL, cfg.ReplaceSecret, cfg.ClearSecret, ok && old.SecretConfigured, deletes)
 		if err != nil {
@@ -579,7 +579,7 @@ func (s *notificationConfigStore) applyWecomUpdates(current, next *notificationC
 		}
 		cfg.SecretConfigured = configured
 		if cfg.Enabled && !configured {
-			return i18n.NewError("api.notification_secret_required", map[string]any{"channel": "WeCom", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationSecretRequired, map[string]any{"channel": "WeCom", "name": cfg.Name})
 		}
 	}
 	for name, cfg := range existing {
@@ -601,10 +601,10 @@ func (s *notificationConfigStore) applyWebhookUpdates(current, next *notificatio
 		seen[cfg.Name] = true
 		old, ok := existing[cfg.Name]
 		if !ok && cfg.SecretConfigured && !cfg.ReplaceSecret && !cfg.ClearSecret {
-			return i18n.NewError("api.notification_renamed_secret_required", map[string]any{"channel": "Webhook", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationRenamedSecretRequired, map[string]any{"channel": "Webhook", "name": cfg.Name})
 		}
 		if cfg.ReplaceSecret && cfg.URL == "" {
-			return i18n.NewError("api.notification_replacement_url_required", map[string]any{"name": cfg.Name})
+			return i18n.NewError(i18n.NotificationReplacementURLRequired, map[string]any{"name": cfg.Name})
 		}
 		configured, err := s.applySecretUpdate(notificationSecretKey("webhook", cfg.Name, "url"), cfg.URL, cfg.ReplaceSecret, cfg.ClearSecret, ok && old.SecretConfigured, deletes)
 		if err != nil {
@@ -621,7 +621,7 @@ func (s *notificationConfigStore) applyWebhookUpdates(current, next *notificatio
 		}
 		cfg.SecretConfigured = configured
 		if cfg.Enabled && !configured {
-			return i18n.NewError("api.notification_secret_required", map[string]any{"channel": "Webhook", "name": cfg.Name})
+			return i18n.NewError(i18n.NotificationSecretRequired, map[string]any{"channel": "Webhook", "name": cfg.Name})
 		}
 	}
 	for name, cfg := range existing {
@@ -634,7 +634,7 @@ func (s *notificationConfigStore) applyWebhookUpdates(current, next *notificatio
 
 func (s *notificationConfigStore) applySecretUpdate(key, value string, replace, clear, oldConfigured bool, deletes *[]string) (bool, error) {
 	if replace && clear {
-		return false, i18n.NewError("api.notification_secret_actions_conflict", nil)
+		return false, i18n.NewError(i18n.NotificationSecretActionsConflict, nil)
 	}
 	if clear {
 		*deletes = append(*deletes, key)
@@ -642,7 +642,7 @@ func (s *notificationConfigStore) applySecretUpdate(key, value string, replace, 
 	}
 	if replace {
 		if value == "" {
-			return false, i18n.NewError("api.notification_replacement_secret_required", nil)
+			return false, i18n.NewError(i18n.NotificationReplacementSecretRequired, nil)
 		}
 		if err := s.setSecret(key, value); err != nil {
 			return false, err
@@ -650,7 +650,7 @@ func (s *notificationConfigStore) applySecretUpdate(key, value string, replace, 
 		return true, nil
 	}
 	if value != "" {
-		return false, i18n.NewError("api.notification_replace_secret_required", nil)
+		return false, i18n.NewError(i18n.NotificationReplaceSecretRequired, nil)
 	}
 	return oldConfigured, nil
 }
@@ -686,11 +686,11 @@ func validateNotificationNames(cfg *notificationConfig) error {
 	seen := make(map[string]bool)
 	check := func(kind, name string) error {
 		if name == "" || utf8.RuneCountInString(name) > 64 || strings.ContainsAny(name, "/\\\r\n\x00") {
-			return i18n.NewError("api.notification_name_invalid", map[string]any{"channel": kind})
+			return i18n.NewError(i18n.NotificationNameInvalid, map[string]any{"channel": kind})
 		}
 		key := kind + "\x00" + name
 		if seen[key] {
-			return i18n.NewError("api.notification_name_duplicate", map[string]any{"channel": kind, "name": name})
+			return i18n.NewError(i18n.NotificationNameDuplicate, map[string]any{"channel": kind, "name": name})
 		}
 		seen[key] = true
 		return nil

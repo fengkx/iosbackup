@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"iosbackup/internal/i18n"
 )
 
 const (
@@ -33,7 +35,7 @@ func (a *authManager) Middleware(next http.Handler) http.Handler {
 				http.Redirect(w, r, "/login?"+url.Values{"next": {nextURL}}.Encode(), http.StatusSeeOther)
 				return
 			}
-			writeError(w, http.StatusUnauthorized, "api.unauthenticated")
+			writeError(w, http.StatusUnauthorized, i18n.Unauthenticated)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -59,15 +61,15 @@ func (c *csrfManager) Middleware(next http.Handler) http.Handler {
 		}
 		fetchSite := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
 		if fetchSite == "cross-site" {
-			writeError(w, http.StatusForbidden, "api.cross_site_rejected")
+			writeError(w, http.StatusForbidden, i18n.CrossSiteRejected)
 			return
 		}
 		if !requestOriginAllowed(r) {
-			writeError(w, http.StatusForbidden, "api.origin_mismatch")
+			writeError(w, http.StatusForbidden, i18n.OriginMismatch)
 			return
 		}
 		if !constantTokenEqual(r.Header.Get(csrfHeader), c.Token()) {
-			writeError(w, http.StatusForbidden, "api.csrf_invalid")
+			writeError(w, http.StatusForbidden, i18n.CSRFInvalid)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -114,16 +116,16 @@ func bodyLimitMiddleware(next http.Handler) http.Handler {
 			limit = configBodyLimit
 		}
 		if r.ContentLength > limit {
-			writeError(w, http.StatusRequestEntityTooLarge, "api.request_too_large")
+			writeError(w, http.StatusRequestEntityTooLarge, i18n.RequestTooLarge)
 			return
 		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "api.request_read_failed")
+			writeError(w, http.StatusBadRequest, i18n.RequestReadFailed)
 			return
 		}
 		if int64(len(body)) > limit {
-			writeError(w, http.StatusRequestEntityTooLarge, "api.request_too_large")
+			writeError(w, http.StatusRequestEntityTooLarge, i18n.RequestTooLarge)
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))

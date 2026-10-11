@@ -12,6 +12,7 @@ import (
 	"strings"
 )
 
+//go:generate go run ./cmd/gencodes
 //go:embed messages.json
 var messagesJSON []byte
 
@@ -93,7 +94,7 @@ func Text(locale, code string, params map[string]any) string {
 		message = catalog["en"][code]
 	}
 	if message == "" {
-		message = catalog[locale]["api.operation_failed"]
+		message = catalog[locale][OperationFailed]
 	}
 	return parameterPattern.ReplaceAllStringFunc(message, func(token string) string {
 		if value, ok := params[token[1:len(token)-1]]; ok {

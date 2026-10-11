@@ -49,19 +49,19 @@ func operationErrorPayload(w http.ResponseWriter, err error, fallbackCode string
 	code := fallbackCode
 	switch {
 	case errors.Is(err, errDeviceNotFound):
-		code = "api.device_not_found"
+		code = i18n.DeviceNotFound
 	case errors.Is(err, errDeviceBusy):
-		code = "api.busy"
+		code = i18n.Busy
 	case errors.Is(err, errDeviceRemoved):
-		code = "api.device_removed_operation"
+		code = i18n.DeviceRemovedOperation
 	case errors.Is(err, errDeviceRemovalPending):
-		code = "api.removal_pending"
+		code = i18n.RemovalPending
 	case errors.Is(err, errConnectionRestarting):
-		code = "api.connection_restarting"
+		code = i18n.ConnectionRestarting
 	case errors.Is(err, errConnectionUnavailable):
-		code = "api.connection_unavailable"
+		code = i18n.ConnectionUnavailable
 	case errors.Is(err, errDeviceDisconnected):
-		code = "api.device_disconnected"
+		code = i18n.DeviceDisconnected
 	}
 	payload := apiMessage(w, code, nil, true)
 	// Unknown tool and OS output is diagnostic data, never a translatable message identifier.
@@ -78,7 +78,7 @@ func writeOperationError(w http.ResponseWriter, status int, err error, fallbackC
 func handleAPIMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	w.Header().Del("Vary")

@@ -90,7 +90,7 @@ func (app *application) RefreshDevices() error {
 	app.mu.Lock()
 	if len(app.backupInProgress) > 0 {
 		app.mu.Unlock()
-		return i18n.NewError("api.busy", nil)
+		return i18n.NewError(i18n.Busy, nil)
 	}
 	app.deviceRefreshGeneration++
 	generation := app.deviceRefreshGeneration

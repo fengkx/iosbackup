@@ -83,6 +83,13 @@ go test -count=1 ./internal/config ./internal/persistence
 - `internal/i18n/messages.json`：Go 与浏览器共用的 API 消息，浏览器通过 `/static/api-messages.js` 加载。
 - `internal/notification/messages.json`：系统通知标题、默认正文和渠道标签。
 
+`internal/i18n/messages.json` 中的 API 消息键同时用于生成 `internal/i18n/codes.go`。Go 调用处引用 `i18n.EncryptionPasswordRequired` 等常量，不直接写 `"api.encryption_password_required"`。增删消息键后运行 `go generate ./internal/i18n`，将生成文件与词典修改一起提交。不要手改 `codes.go`，也不要在常量重构时改变既有对外消息键的值。CI 以只读方式检查生成结果是否同步；Go 源码检查会拒绝业务代码中的完整 API 消息键字面量。协议测试可保留字面量，以发现意外的兼容性变化。
+
+```bash
+go generate ./internal/i18n
+go run ./internal/i18n/cmd/gencodes -dir internal/i18n -check
+```
+
 使用语义明确的 key 和完整句子，参数使用名称（UI/API 为 `{name}`，通知模板为 `${name}`），各语言的参数名须一致。不拼接句子片段、不从译文生成 key、不按展示标签分支。设备名、路径、自定义模板保持原值。已知失败返回稳定的 `message_code` 与 `params`；`code` 保留端点既有的机器分类，新端点默认与消息键相同。保留可读的兼容 `error`/`message` 字段；工具原始输出放在诊断 `detail` 中。界面优先翻译 `message_code`，兼容回退到 `code`，并支持操作完成后切换语言。SSE 广播机器状态和标准时间点，不保存某个浏览器的最终译文。
 
 界面语言、通知语言和备份调度相互独立。通知 `language` 按部署实例持久化，缺省仍为 `zh-CN`，兼容旧配置。正文覆盖为空时，发送时按通知语言选择默认模板。已有非空模板视为用户内容，即使它恰好等于旧中文默认值，也要保留，直到管理员主动清空。切换界面语言不改变通知或备份时刻。计划和时间显示继续使用 `Asia/Shanghai`；新增 `last_backup_at` 携带时区偏移，同时为旧客户端保留 `last_backup`。

@@ -31,13 +31,13 @@ func (app *application) requireExperimentalOperations(w http.ResponseWriter) boo
 	if app.enableExperimentalOperations {
 		return true
 	}
-	writeError(w, http.StatusForbidden, "api.experimental_disabled")
+	writeError(w, http.StatusForbidden, i18n.ExperimentalDisabled)
 	return false
 }
 
 func (app *application) rejectRemovedDeviceOperation(w http.ResponseWriter, udid string) bool {
 	if err := app.deviceRemovalBlock(udid); err != nil {
-		writeOperationError(w, http.StatusConflict, err, "api.operation_failed")
+		writeOperationError(w, http.StatusConflict, err, i18n.OperationFailed)
 		return true
 	}
 	return false
@@ -122,7 +122,7 @@ func (app *application) setupRoutes() http.Handler {
 	root.Handle("/login", bodyLimitMiddleware(http.HandlerFunc(app.handleLogin)))
 	root.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+			writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -158,31 +158,31 @@ func (app *application) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")), "cross-site") {
-		writeError(w, http.StatusForbidden, "api.cross_site_rejected")
+		writeError(w, http.StatusForbidden, i18n.CrossSiteRejected)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		writeError(w, http.StatusBadRequest, "api.invalid_form")
+		writeError(w, http.StatusBadRequest, i18n.InvalidForm)
 		return
 	}
 	next = safeLoginNext(r.Form.Get("next"))
 	if !constantTokenEqual(r.Form.Get("csrf_token"), app.csrfManager.Token()) {
-		writeError(w, http.StatusForbidden, "api.csrf_invalid")
+		writeError(w, http.StatusForbidden, i18n.CSRFInvalid)
 		return
 	}
 	password := r.Form.Get("password")
 	if len(password) > 4096 || !app.authManager.AuthenticatePassword(password) {
-		app.renderLogin(w, r, http.StatusUnauthorized, next, "api.login_invalid_credentials")
+		app.renderLogin(w, r, http.StatusUnauthorized, next, i18n.LoginInvalidCredentials)
 		return
 	}
 	token, err := app.authManager.createSession(time.Now())
 	if err != nil {
 		log.Printf("event=auth.session_create_failed error=%v", err)
-		writeError(w, http.StatusInternalServerError, "api.login_unavailable")
+		writeError(w, http.StatusInternalServerError, i18n.LoginUnavailable)
 		return
 	}
 	setAuthSessionCookie(w, r, token)
@@ -212,7 +212,7 @@ func (app *application) renderLogin(w http.ResponseWriter, r *http.Request, stat
 
 func (app *application) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if cookie, err := r.Cookie(authSessionCookieName); err == nil {
@@ -337,9 +337,9 @@ func (app *application) removedDevices() []removedDeviceDTO {
 }
 
 func writeDeviceRemovalError(w http.ResponseWriter, status int, code string) {
-	key := map[string]string{"not_found": "api.device_not_found", "busy": "api.busy", "removal_pending": "api.removal_pending", "persistence_failed": "api.device_state_save_failed", "csrf_required": "api.csrf_required", "invalid_udid": "api.invalid_udid"}[code]
+	key := map[string]string{"not_found": i18n.DeviceNotFound, "busy": i18n.Busy, "removal_pending": i18n.RemovalPending, "persistence_failed": i18n.DeviceStateSaveFailed, "csrf_required": i18n.CSRFRequired, "invalid_udid": i18n.InvalidUDID}[code]
 	if key == "" {
-		key = "api.operation_failed"
+		key = i18n.OperationFailed
 	}
 	payload := apiMessage(w, key, nil, true)
 	payload["code"] = code
@@ -356,7 +356,7 @@ func writeDeviceRemovalOperationError(w http.ResponseWriter, err error) {
 	case errors.Is(err, errDeviceRemovalPending):
 		writeDeviceRemovalError(w, http.StatusConflict, "removal_pending")
 	default:
-		payload := operationErrorPayload(w, err, "api.device_state_save_failed")
+		payload := operationErrorPayload(w, err, i18n.DeviceStateSaveFailed)
 		payload["code"] = "persistence_failed"
 		payload["error_code"] = "persistence_failed"
 		writeJSON(w, http.StatusInternalServerError, payload)
@@ -366,7 +366,7 @@ func writeDeviceRemovalOperationError(w http.ResponseWriter, err error) {
 func (app *application) handleRemovedDevices(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	devices := app.removedDevices()
@@ -376,7 +376,7 @@ func (app *application) handleRemovedDevices(w http.ResponseWriter, r *http.Requ
 func (app *application) handleRemoveDevice(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if !csrfOK(r) {
@@ -393,7 +393,7 @@ func (app *application) handleRemoveDevice(w http.ResponseWriter, r *http.Reques
 		writeDeviceRemovalOperationError(w, err)
 		return
 	}
-	payload := apiMessage(w, "api.device_removed", nil, false)
+	payload := apiMessage(w, i18n.DeviceRemoved, nil, false)
 	payload["removed_at"] = removedDeviceTime(removedAt)
 	writeJSON(w, http.StatusOK, payload)
 }
@@ -401,7 +401,7 @@ func (app *application) handleRemoveDevice(w http.ResponseWriter, r *http.Reques
 func (app *application) handleRestoreDevice(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if !csrfOK(r) {
@@ -422,13 +422,13 @@ func (app *application) handleRestoreDevice(w http.ResponseWriter, r *http.Reque
 			app.addWarnLog(udid, fmt.Sprintf("event=device.refresh_after_reinstatement_failed error=%v", err))
 		}
 	}()
-	writeSuccess(w, "api.device_restored")
+	writeSuccess(w, i18n.DeviceRestored)
 }
 
 // HTTP处理函数
 func (app *application) handleHome(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		writeError(w, http.StatusNotFound, "api.not_found")
+		writeError(w, http.StatusNotFound, i18n.NotFound)
 		return
 	}
 
@@ -517,14 +517,14 @@ func (app *application) handleHome(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := app.htmlTemplate.Execute(w, data); err != nil {
 		log.Printf("event=ui.template_render_failed page=console error=%v", err)
-		writeError(w, http.StatusInternalServerError, "api.page_render_failed")
+		writeError(w, http.StatusInternalServerError, i18n.PageRenderFailed)
 		return
 	}
 }
 
 func (app *application) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	data := struct {
@@ -543,13 +543,13 @@ func (app *application) handleOnboarding(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := app.onboardingTemplate.Execute(w, data); err != nil {
 		log.Printf("event=ui.template_render_failed page=onboarding error=%v", err)
-		writeError(w, http.StatusInternalServerError, "api.page_render_failed")
+		writeError(w, http.StatusInternalServerError, i18n.PageRenderFailed)
 	}
 }
 
 func (app *application) handleVersion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
@@ -565,7 +565,7 @@ func (app *application) handleVersion(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
@@ -602,7 +602,7 @@ func (app *application) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
@@ -614,14 +614,14 @@ func (app *application) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	if backupCount > 0 {
 		// 有备份在进行中，使用轻量级刷新
 		app.RefreshDevicesStatus()
-		writeSuccess(w, "api.refresh_lightweight")
+		writeSuccess(w, i18n.RefreshLightweight)
 	} else {
 		// 没有备份在进行中，使用完整刷新
 		if err := app.RefreshDevices(); err != nil {
-			writeOperationError(w, http.StatusConflict, err, "api.operation_failed")
+			writeOperationError(w, http.StatusConflict, err, i18n.OperationFailed)
 			return
 		}
-		writeSuccess(w, "api.refresh_complete")
+		writeSuccess(w, i18n.RefreshComplete)
 	}
 }
 
@@ -629,29 +629,29 @@ func (app *application) handleRefresh(w http.ResponseWriter, r *http.Request) {
 // 端点名保持 /api/restart-usbmuxd 兼容旧调用方，但行为已扩为重启两者。
 func (app *application) handleRestartUSBMuxD(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
 	targets := app.connectionTargets()
 	if err := app.reserveConnectionRecovery(targets, true); err != nil {
-		writeOperationError(w, http.StatusConflict, err, "api.operation_failed")
+		writeOperationError(w, http.StatusConflict, err, i18n.OperationFailed)
 		return
 	}
 	go func() { _ = app.executeConnectionRecovery(app.rootCtx, targets, true) }()
 
-	writeSuccess(w, "api.connection_restart_started")
+	writeSuccess(w, i18n.ConnectionRestartStarted)
 }
 
 func (app *application) handleBackup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
 	udid := extractUDIDFromPath(r.URL.Path, "/api/backup/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 
@@ -666,7 +666,7 @@ func (app *application) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 	// 全局并发上限：已有备份占满则同步拒绝（多设备避免成倍占用 CPU/内存）。
 	if !app.backupSem.tryAcquire() {
-		payload := apiMessage(w, "api.backup_busy", nil, true)
+		payload := apiMessage(w, i18n.BackupBusy, nil, true)
 		payload["error_code"] = "backup_busy"
 		writeJSON(w, http.StatusConflict, payload)
 		return
@@ -677,7 +677,7 @@ func (app *application) handleBackup(w http.ResponseWriter, r *http.Request) {
 	release, err := app.beginConnectionTask(dev)
 	if err != nil {
 		app.backupSem.release()
-		writeOperationError(w, http.StatusConflict, err, "api.operation_failed")
+		writeOperationError(w, http.StatusConflict, err, i18n.OperationFailed)
 		return
 	}
 	app.markBackupStarting(udid)
@@ -689,7 +689,7 @@ func (app *application) handleBackup(w http.ResponseWriter, r *http.Request) {
 			app.addLog(udid, fmt.Sprintf("event=backup.failed error=%v", err))
 		}
 	}()
-	payload := apiMessage(w, "api.backup_started", nil, false)
+	payload := apiMessage(w, i18n.BackupStarted, nil, false)
 	payload["backup_state"] = backupStateStarting
 	writeJSON(w, http.StatusAccepted, payload)
 }
@@ -703,13 +703,13 @@ func (app *application) handleBackup(w http.ResponseWriter, r *http.Request) {
 // 实现：先解析为 map[string]json.RawMessage，再逐字段写入旧配置。
 func (app *application) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
 	udid := extractUDIDFromPath(r.URL.Path, "/api/save-config/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 	if app.rejectRemovedDeviceOperation(w, udid) {
@@ -719,7 +719,7 @@ func (app *application) handleSaveConfig(w http.ResponseWriter, r *http.Request)
 	// 解析请求体为原始 JSON map，保留字段出现信息
 	var rawFields map[string]json.RawMessage
 	if err := decodeRequestJSON(r, &rawFields); err != nil {
-		writeError(w, http.StatusBadRequest, "api.invalid_json")
+		writeError(w, http.StatusBadRequest, i18n.InvalidJSON)
 		return
 	}
 
@@ -728,7 +728,7 @@ func (app *application) handleSaveConfig(w http.ResponseWriter, r *http.Request)
 	app.mu.RLock()
 	if err := app.deviceRemovalBlockedUnsafe(udid); err != nil {
 		app.mu.RUnlock()
-		writeOperationError(w, http.StatusConflict, err, "api.operation_failed")
+		writeOperationError(w, http.StatusConflict, err, i18n.OperationFailed)
 		return
 	}
 
@@ -749,7 +749,7 @@ func (app *application) handleSaveConfig(w http.ResponseWriter, r *http.Request)
 
 	// merge：只更新请求中明确出现的字段
 	if err := mergeBackupConfig(&candidate, rawFields); err != nil {
-		writeOperationError(w, http.StatusBadRequest, err, "api.config_invalid")
+		writeOperationError(w, http.StatusBadRequest, err, i18n.ConfigInvalid)
 		return
 	}
 
@@ -762,11 +762,11 @@ func (app *application) handleSaveConfig(w http.ResponseWriter, r *http.Request)
 	}
 	app.applyBackupConfigDefaults(&candidate)
 	if err := validateBackupConfig(candidate, []string{app.paths.BackupsRoot}); err != nil {
-		writeOperationError(w, http.StatusBadRequest, err, "api.config_invalid")
+		writeOperationError(w, http.StatusBadRequest, err, i18n.ConfigInvalid)
 		return
 	}
 	if err := app.configStore.Put(candidate); err != nil {
-		writeOperationError(w, http.StatusInternalServerError, err, "api.config_save_failed")
+		writeOperationError(w, http.StatusInternalServerError, err, i18n.ConfigSaveFailed)
 		return
 	}
 	app.mu.Lock()
@@ -784,24 +784,24 @@ func (app *application) handleSaveConfig(w http.ResponseWriter, r *http.Request)
 		go app.replayAddDevice()
 	}
 
-	writeSuccess(w, "api.config_saved")
+	writeSuccess(w, i18n.ConfigSaved)
 }
 
 // handleCheckBackupDir 校验「保存位置」是否可用（可创建+可写，未被文件占用）。不限制目录范围。
 func (app *application) handleCheckBackupDir(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if !csrfOK(r) {
-		writeError(w, http.StatusForbidden, "api.csrf_required")
+		writeError(w, http.StatusForbidden, i18n.CSRFRequired)
 		return
 	}
 	var body struct {
 		Path string `json:"path"`
 	}
 	if err := decodeRequestJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "api.invalid_json")
+		writeError(w, http.StatusBadRequest, i18n.InvalidJSON)
 		return
 	}
 	ok, err := checkBackupDir(body.Path)
@@ -809,7 +809,7 @@ func (app *application) handleCheckBackupDir(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 		return
 	}
-	payload := operationErrorPayload(w, err, "api.operation_failed")
+	payload := operationErrorPayload(w, err, i18n.OperationFailed)
 	payload["ok"], payload["reason"] = false, payload["error"]
 	writeJSON(w, http.StatusOK, payload)
 }
@@ -817,11 +817,11 @@ func (app *application) handleCheckBackupDir(w http.ResponseWriter, r *http.Requ
 // handleDeleteBackup 删除该设备在本机的整份备份（破坏性）。需 CSRF + 设备名二次确认。
 func (app *application) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if !csrfOK(r) {
-		writeError(w, http.StatusForbidden, "api.csrf_required")
+		writeError(w, http.StatusForbidden, i18n.CSRFRequired)
 		return
 	}
 	if !app.requireExperimentalOperations(w) {
@@ -835,7 +835,7 @@ func (app *application) handleDeleteBackup(w http.ResponseWriter, r *http.Reques
 		ConfirmName string `json:"confirm_name"`
 	}
 	if err := decodeRequestJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "api.invalid_json")
+		writeError(w, http.StatusBadRequest, i18n.InvalidJSON)
 		return
 	}
 	app.mu.RLock()
@@ -846,24 +846,24 @@ func (app *application) handleDeleteBackup(w http.ResponseWriter, r *http.Reques
 	}
 	app.mu.RUnlock()
 	if !ok {
-		writeError(w, http.StatusNotFound, "api.device_not_found")
+		writeError(w, http.StatusNotFound, i18n.DeviceNotFound)
 		return
 	}
 	if strings.TrimSpace(body.ConfirmName) != name {
-		writeError(w, http.StatusConflict, "api.confirm_name_mismatch")
+		writeError(w, http.StatusConflict, i18n.ConfirmNameMismatch)
 		return
 	}
 	if err := app.DeleteDeviceBackup(udid); err != nil {
-		writeOperationError(w, http.StatusConflict, err, "api.operation_failed")
+		writeOperationError(w, http.StatusConflict, err, i18n.OperationFailed)
 		return
 	}
-	writeSuccess(w, "api.backup_deleted")
+	writeSuccess(w, i18n.BackupDeleted)
 }
 
 // handleEncryptionStatus 返回设备当前是否启用备份加密（WillEncrypt），供加密页显示当前状态。
 func (app *application) handleEncryptionStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	udid := extractUDIDFromPath(r.URL.Path, "/api/encryption-status/")
@@ -899,16 +899,16 @@ func (app *application) handleEncryptionStatus(w http.ResponseWriter, r *http.Re
 // 等待 netmuxd 注册并确认设备上线后才返回成功，同时返回状态供页面立即更新。
 func (app *application) handleTestDeviceIP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if !csrfOK(r) {
-		writeError(w, http.StatusForbidden, "api.csrf_required")
+		writeError(w, http.StatusForbidden, i18n.CSRFRequired)
 		return
 	}
 	udid := extractUDIDFromPath(r.URL.Path, "/api/test-ip/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 	if app.rejectRemovedDeviceOperation(w, udid) {
@@ -918,26 +918,26 @@ func (app *application) handleTestDeviceIP(w http.ResponseWriter, r *http.Reques
 		IP string `json:"ip"`
 	}
 	if err := decodeRequestJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "api.invalid_json")
+		writeError(w, http.StatusBadRequest, i18n.InvalidJSON)
 		return
 	}
 	ip := strings.TrimSpace(body.IP)
 	if ip == "" {
-		payload := apiMessage(w, "api.ip_required", nil, true)
+		payload := apiMessage(w, i18n.IPRequired, nil, true)
 		payload["ok"], payload["reason"] = false, payload["error"]
 		writeJSON(w, http.StatusBadRequest, payload)
 		return
 	}
 	addr, err := parseDeviceNetworkAddress(ip)
 	if err != nil {
-		payload := operationErrorPayload(w, err, "api.ip_invalid")
+		payload := operationErrorPayload(w, err, i18n.IPInvalid)
 		payload["ok"], payload["reason"] = false, payload["error"]
 		writeJSON(w, http.StatusBadRequest, payload)
 		return
 	}
 	ip = addr.String()
 	if err := app.callAddDevice(udid, ip); err != nil {
-		payload := operationErrorPayload(w, err, "api.ip_connection_failed")
+		payload := operationErrorPayload(w, err, i18n.IPConnectionFailed)
 		payload["ok"], payload["reason"], payload["ip"] = false, payload["error"], ip
 		writeJSON(w, http.StatusOK, payload)
 		return
@@ -955,7 +955,7 @@ func (app *application) handleTestDeviceIP(w http.ResponseWriter, r *http.Reques
 	}
 	payload := map[string]any{"ok": connected, "reason": "", "ip": ip, "status": snapshot}
 	if !connected {
-		for key, value := range apiMessage(w, "api.ip_device_offline", nil, true) {
+		for key, value := range apiMessage(w, i18n.IPDeviceOffline, nil, true) {
 			payload[key] = value
 		}
 		payload["reason"] = payload["error"]
@@ -977,10 +977,10 @@ func mergeBackupConfig(dst *backupConfig, rawFields map[string]json.RawMessage) 
 	for field, value := range rawFields {
 		target, ok := known[field]
 		if !ok {
-			return i18n.NewError("api.config_unknown_field", map[string]any{"field": field})
+			return i18n.NewError(i18n.ConfigUnknownField, map[string]any{"field": field})
 		}
 		if err := json.Unmarshal(value, target); err != nil {
-			return &i18n.Error{Code: "api.config_field_invalid", Params: map[string]any{"field": field}, Detail: err.Error(), Cause: err}
+			return &i18n.Error{Code: i18n.ConfigFieldInvalid, Params: map[string]any{"field": field}, Detail: err.Error(), Cause: err}
 		}
 	}
 	return nil
@@ -988,13 +988,13 @@ func mergeBackupConfig(dst *backupConfig, rawFields map[string]json.RawMessage) 
 
 func (app *application) handlePairDevice(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
 	udid := extractUDIDFromPath(r.URL.Path, "/api/pair/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 	if app.rejectRemovedDeviceOperation(w, udid) {
@@ -1008,19 +1008,19 @@ func (app *application) handlePairDevice(w http.ResponseWriter, r *http.Request)
 	app.mu.RUnlock()
 
 	if !exists {
-		writeError(w, http.StatusNotFound, "api.device_not_found")
+		writeError(w, http.StatusNotFound, i18n.DeviceNotFound)
 		return
 	}
 
 	release, err := app.beginConnectionTask(device)
 	if err != nil {
-		writeOperationError(w, http.StatusConflict, err, "api.operation_failed")
+		writeOperationError(w, http.StatusConflict, err, i18n.OperationFailed)
 		return
 	}
 	app.setPairingState(udid, pairingStateChecking, "", "")
 	go func() { defer release(); app.pairDeviceInTask(device) }()
 
-	payload := apiMessage(w, "api.pairing_started", nil, false)
+	payload := apiMessage(w, i18n.PairingStarted, nil, false)
 	payload["pairing_state"] = pairingStateChecking
 	writeJSON(w, http.StatusAccepted, payload)
 }
@@ -1032,7 +1032,7 @@ func (app *application) handleNotificationConfig(w http.ResponseWriter, r *http.
 		// 获取通知配置
 		config, err := app.notificationConfigStore.Public()
 		if err != nil {
-			writeOperationError(w, http.StatusInternalServerError, err, "api.notification_config_load_failed")
+			writeOperationError(w, http.StatusInternalServerError, err, i18n.NotificationConfigLoadFailed)
 			return
 		}
 		writeJSON(w, http.StatusOK, config)
@@ -1041,26 +1041,26 @@ func (app *application) handleNotificationConfig(w http.ResponseWriter, r *http.
 		// 保存通知配置
 		var config notificationConfig
 		if err := decodeRequestJSON(r, &config); err != nil {
-			writeError(w, http.StatusBadRequest, "api.invalid_json")
+			writeError(w, http.StatusBadRequest, i18n.InvalidJSON)
 			return
 		}
 
 		// 先在内存中合并现有秘密并验证所有已启用通知器；验证失败不得落盘。
 		preview, err := app.notificationConfigStore.Preview(&config)
 		if err != nil {
-			writeOperationError(w, http.StatusBadRequest, err, "api.notification_config_invalid")
+			writeOperationError(w, http.StatusBadRequest, err, i18n.NotificationConfigInvalid)
 			return
 		}
 		notificationManager, err := newNotificationManagerFromConfig(preview, app.runtimeConfig.WebhookAllowCIDRs)
 		if err != nil {
-			writeOperationError(w, http.StatusBadRequest, err, "api.notification_config_invalid")
+			writeOperationError(w, http.StatusBadRequest, err, i18n.NotificationConfigInvalid)
 			return
 		}
 
 		// 保存配置
 		if err := app.notificationConfigStore.Save(&config); err != nil {
 			notificationManager.Close()
-			writeOperationError(w, http.StatusInternalServerError, err, "api.notification_config_save_failed")
+			writeOperationError(w, http.StatusInternalServerError, err, i18n.NotificationConfigSaveFailed)
 			return
 		}
 
@@ -1070,17 +1070,17 @@ func (app *application) handleNotificationConfig(w http.ResponseWriter, r *http.
 			oldManager.Close()
 		}
 
-		writeSuccess(w, "api.notification_config_saved")
+		writeSuccess(w, i18n.NotificationConfigSaved)
 
 	default:
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 	}
 }
 
 // handleNotificationTest 处理通知测试
 func (app *application) handleNotificationTest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
@@ -1090,19 +1090,19 @@ func (app *application) handleNotificationTest(w http.ResponseWriter, r *http.Re
 	}
 
 	if err := decodeRequestJSON(r, &testData); err != nil {
-		writeError(w, http.StatusBadRequest, "api.invalid_json")
+		writeError(w, http.StatusBadRequest, i18n.InvalidJSON)
 		return
 	}
 
 	manager := app.notificationManagerSnapshot()
 	if manager == nil {
-		writeError(w, http.StatusServiceUnavailable, "api.notification_unavailable")
+		writeError(w, http.StatusServiceUnavailable, i18n.NotificationUnavailable)
 		return
 	}
 
 	message := manager.NewTestMessage(notificationType(testData.MessageType))
 	if message == nil {
-		writeError(w, http.StatusBadRequest, "api.notification_type_unsupported")
+		writeError(w, http.StatusBadRequest, i18n.NotificationTypeUnsupported)
 		return
 	}
 
@@ -1125,7 +1125,7 @@ func (app *application) handleNotificationTest(w http.ResponseWriter, r *http.Re
 // handleNotificationStatus 处理通知状态查询
 func (app *application) handleNotificationStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
@@ -1150,12 +1150,12 @@ func (app *application) handleNotificationStatus(w http.ResponseWriter, r *http.
 // handleBackupInfo 读取设备备份信息（只读）。GET /api/backup-info/{udid}
 func (app *application) handleBackupInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	udid := extractUDIDFromPath(r.URL.Path, "/api/backup-info/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 	if app.rejectRemovedDeviceOperation(w, udid) {
@@ -1179,12 +1179,12 @@ func (app *application) handleBackupInfo(w http.ResponseWriter, r *http.Request)
 // handleBackupList 列出备份内文件（只读，CSV→JSON）。GET /api/backup-list/{udid}
 func (app *application) handleBackupList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	udid := extractUDIDFromPath(r.URL.Path, "/api/backup-list/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 	if app.rejectRemovedDeviceOperation(w, udid) {
@@ -1220,7 +1220,7 @@ func (app *application) handleBackupList(w http.ResponseWriter, r *http.Request)
 			})
 			return
 		}
-		writeOperationError(w, http.StatusConflict, err, "api.backup_list_failed")
+		writeOperationError(w, http.StatusConflict, err, i18n.BackupListFailed)
 		return
 	}
 
@@ -1236,11 +1236,11 @@ func (app *application) handleBackupList(w http.ResponseWriter, r *http.Request)
 // handleBackupUnback 解包备份（长操作，后台执行）。POST /api/backup-unback/{udid}
 func (app *application) handleBackupUnback(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if !csrfOK(r) {
-		writeError(w, http.StatusForbidden, "api.csrf_required")
+		writeError(w, http.StatusForbidden, i18n.CSRFRequired)
 		return
 	}
 	if !app.requireExperimentalOperations(w) {
@@ -1248,7 +1248,7 @@ func (app *application) handleBackupUnback(w http.ResponseWriter, r *http.Reques
 	}
 	udid := extractUDIDFromPath(r.URL.Path, "/api/backup-unback/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 	if app.rejectRemovedDeviceOperation(w, udid) {
@@ -1256,11 +1256,11 @@ func (app *application) handleBackupUnback(w http.ResponseWriter, r *http.Reques
 	}
 	// 纯本地操作：设备离线也可执行；只要求本地存在完整备份。
 	if !app.hasLocalBackup(udid) {
-		writeError(w, http.StatusConflict, "api.backup_missing")
+		writeError(w, http.StatusConflict, i18n.BackupMissing)
 		return
 	}
 	if err := requirePlainSQLiteManifest(filepath.Join(app.deviceBackupPath(udid), "Manifest.db")); err != nil {
-		writeOperationError(w, http.StatusConflict, err, "api.operation_failed")
+		writeOperationError(w, http.StatusConflict, err, i18n.OperationFailed)
 		return
 	}
 	go func() {
@@ -1270,7 +1270,7 @@ func (app *application) handleBackupUnback(w http.ResponseWriter, r *http.Reques
 			app.notifySystemEvent("unpack_failed", map[string]string{"device_udid": udid, "diagnostics": message})
 		}
 	}()
-	writeSuccess(w, "api.unpack_started")
+	writeSuccess(w, i18n.UnpackStarted)
 }
 
 // csrfHeader 状态变更端点要求的自定义头（拒绝简单跨站表单 POST）。前端所有 P4 POST 须带它。
@@ -1284,16 +1284,16 @@ func csrfOK(r *http.Request) bool {
 // handleEncryption 开/关备份加密（改设备状态，后台执行）。POST /api/encryption/{udid}
 func (app *application) handleEncryption(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if !csrfOK(r) {
-		writeError(w, http.StatusForbidden, "api.csrf_required")
+		writeError(w, http.StatusForbidden, i18n.CSRFRequired)
 		return
 	}
 	udid := extractUDIDFromPath(r.URL.Path, "/api/encryption/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 	if app.rejectRemovedDeviceOperation(w, udid) {
@@ -1304,11 +1304,11 @@ func (app *application) handleEncryption(w http.ResponseWriter, r *http.Request)
 		Password string `json:"password"`
 	}
 	if err := decodeRequestJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "api.invalid_json")
+		writeError(w, http.StatusBadRequest, i18n.InvalidJSON)
 		return
 	}
 	if req.Password == "" {
-		writeError(w, http.StatusBadRequest, "api.encryption_password_required")
+		writeError(w, http.StatusBadRequest, i18n.EncryptionPasswordRequired)
 		return
 	}
 	go func() {
@@ -1320,22 +1320,22 @@ func (app *application) handleEncryption(w http.ResponseWriter, r *http.Request)
 			app.notifySystemEvent("encryption_failed", map[string]string{"device_udid": udid, "diagnostics": message})
 		}
 	}()
-	writeSuccess(w, "api.encryption_submitted")
+	writeSuccess(w, i18n.EncryptionSubmitted)
 }
 
 // handleChangePassword 改备份密码（改设备状态，后台执行）。POST /api/backup-changepw/{udid}
 func (app *application) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if !csrfOK(r) {
-		writeError(w, http.StatusForbidden, "api.csrf_required")
+		writeError(w, http.StatusForbidden, i18n.CSRFRequired)
 		return
 	}
 	udid := extractUDIDFromPath(r.URL.Path, "/api/backup-changepw/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 	if app.rejectRemovedDeviceOperation(w, udid) {
@@ -1346,11 +1346,11 @@ func (app *application) handleChangePassword(w http.ResponseWriter, r *http.Requ
 		New string `json:"new"`
 	}
 	if err := decodeRequestJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "api.invalid_json")
+		writeError(w, http.StatusBadRequest, i18n.InvalidJSON)
 		return
 	}
 	if req.Old == "" || req.New == "" {
-		writeError(w, http.StatusBadRequest, "api.passwords_required")
+		writeError(w, http.StatusBadRequest, i18n.PasswordsRequired)
 		return
 	}
 	go func() {
@@ -1362,7 +1362,7 @@ func (app *application) handleChangePassword(w http.ResponseWriter, r *http.Requ
 			app.notifySystemEvent("password_change_failed", map[string]string{"device_udid": udid, "diagnostics": message})
 		}
 	}()
-	writeSuccess(w, "api.password_change_submitted")
+	writeSuccess(w, i18n.PasswordChangeSubmitted)
 }
 
 // restoreReq 恢复请求体（多重确认 + 选项）。
@@ -1378,16 +1378,16 @@ type restoreReq struct {
 // handleRestore 恢复备份到设备（**破坏性**，默认禁用 + 多重确认 + CSRF + 审计）。POST /api/restore/{udid}
 func (app *application) handleRestore(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	if !csrfOK(r) {
-		writeError(w, http.StatusForbidden, "api.csrf_required")
+		writeError(w, http.StatusForbidden, i18n.CSRFRequired)
 		return
 	}
 	udid := extractUDIDFromPath(r.URL.Path, "/api/restore/")
 	if udid == "" {
-		writeError(w, http.StatusBadRequest, "api.invalid_udid")
+		writeError(w, http.StatusBadRequest, i18n.InvalidUDID)
 		return
 	}
 	if app.rejectRemovedDeviceOperation(w, udid) {
@@ -1409,27 +1409,27 @@ func (app *application) handleRestore(w http.ResponseWriter, r *http.Request) {
 	// 默认禁用：未开启恢复直接 403（审计）
 	if !restoreEnabled {
 		app.addWarnLog(udid, "event=restore.rejected reason=restore_disabled")
-		writeError(w, http.StatusForbidden, "api.restore_disabled")
+		writeError(w, http.StatusForbidden, i18n.RestoreDisabled)
 		return
 	}
 
 	var req restoreReq
 	if err := decodeRequestJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "api.invalid_json")
+		writeError(w, http.StatusBadRequest, i18n.InvalidJSON)
 		return
 	}
 	if !req.Confirmations.Understand {
-		writeError(w, http.StatusBadRequest, "api.restore_confirmation_required")
+		writeError(w, http.StatusBadRequest, i18n.RestoreConfirmationRequired)
 		return
 	}
 	if !devOk || !devOnline {
-		writeError(w, http.StatusConflict, "api.device_offline")
+		writeError(w, http.StatusConflict, i18n.DeviceOffline)
 		return
 	}
 	// 设备名 trim 后精确匹配
 	if strings.TrimSpace(req.Confirmations.DeviceName) != devName {
 		app.addWarnLog(udid, "event=restore.rejected reason=device_name_mismatch")
-		writeError(w, http.StatusBadRequest, "api.confirm_name_mismatch")
+		writeError(w, http.StatusBadRequest, i18n.ConfirmNameMismatch)
 		return
 	}
 
@@ -1443,13 +1443,13 @@ func (app *application) handleRestore(w http.ResponseWriter, r *http.Request) {
 			app.notifySystemEvent("restore_failed", map[string]string{"device_udid": udid, "diagnostics": message})
 		}
 	}()
-	writeSuccess(w, "api.restore_started")
+	writeSuccess(w, i18n.RestoreStarted)
 }
 
 // handleNotifications 处理通知设置页面
 func (app *application) handleNotifications(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 
@@ -1457,14 +1457,14 @@ func (app *application) handleNotifications(w http.ResponseWriter, r *http.Reque
 	tmpl, err := templateFS.ReadFile("templates/notifications.html")
 	if err != nil {
 		log.Printf("event=ui.template_read_failed page=notifications error=%v", err)
-		writeError(w, http.StatusInternalServerError, "api.page_render_failed")
+		writeError(w, http.StatusInternalServerError, i18n.PageRenderFailed)
 		return
 	}
 
 	parsed, err := template.New("notifications.html").Funcs(template.FuncMap{"t": uiText}).Parse(string(tmpl))
 	if err != nil {
 		log.Printf("event=ui.template_parse_failed page=notifications error=%v", err)
-		writeError(w, http.StatusInternalServerError, "api.page_render_failed")
+		writeError(w, http.StatusInternalServerError, i18n.PageRenderFailed)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

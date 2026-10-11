@@ -27,14 +27,14 @@ func (app *application) acquireDeviceOp(udid string) (device *device, dir string
 		return nil, "", nil, err
 	}
 	if app.backupInProgress[udid] {
-		return nil, "", nil, i18n.NewError("api.busy", nil)
+		return nil, "", nil, i18n.NewError(i18n.Busy, nil)
 	}
 	dev, ok := app.devices[udid]
 	if !ok {
-		return nil, "", nil, i18n.NewError("api.device_not_found", nil)
+		return nil, "", nil, i18n.NewError(i18n.DeviceNotFound, nil)
 	}
 	if !dev.IsOnline {
-		return nil, "", nil, i18n.NewError("api.device_offline", nil)
+		return nil, "", nil, i18n.NewError(i18n.DeviceOffline, nil)
 	}
 
 	if err := app.connectionAdmissionUnsafe(dev); err != nil {
@@ -59,7 +59,7 @@ func (app *application) acquireDeviceOp(udid string) (device *device, dir string
 // 开启时把密码存入 secretStore（故需 secretStore 可用）；关闭成功后删除存储的密码。
 func (app *application) SetBackupEncryption(ctx context.Context, udid string, enable bool, password string) error {
 	if password == "" {
-		return i18n.NewError("api.encryption_password_required", nil)
+		return i18n.NewError(i18n.EncryptionPasswordRequired, nil)
 	}
 	// 开启加密要存密码 → 必须有可用 secretStore（否则密码无处安全保存）
 	if enable && (app.secretStore == nil || !app.secretStore.Available()) {
@@ -81,7 +81,7 @@ func (app *application) SetBackupEncryption(ctx context.Context, udid string, en
 	env := []string{"BACKUP_PASSWORD=" + password}
 	out, err := app.runIdeviceCmdBoundedEnv(ctx, cmdKindLong, device, env, cmdIdevicebackup2, "encryption", state)
 	if err != nil {
-		return operationError("api.encryption_failed", err, cleanBackupOutput(out))
+		return operationError(i18n.EncryptionFailed, err, cleanBackupOutput(out))
 	}
 
 	// 同步 secretStore
@@ -101,7 +101,7 @@ func (app *application) SetBackupEncryption(ctx context.Context, udid string, en
 // ChangeBackupPassword 修改设备备份密码。旧/新密码经 env（BACKUP_PASSWORD/BACKUP_PASSWORD_NEW），不进 argv。
 func (app *application) ChangeBackupPassword(ctx context.Context, udid, oldPw, newPw string) error {
 	if oldPw == "" || newPw == "" {
-		return i18n.NewError("api.passwords_required", nil)
+		return i18n.NewError(i18n.PasswordsRequired, nil)
 	}
 	if app.secretStore == nil || !app.secretStore.Available() {
 		return errEncryptionUnavailable
@@ -117,7 +117,7 @@ func (app *application) ChangeBackupPassword(ctx context.Context, udid, oldPw, n
 	env := []string{"BACKUP_PASSWORD=" + oldPw, "BACKUP_PASSWORD_NEW=" + newPw}
 	out, err := app.runIdeviceCmdBoundedEnv(ctx, cmdKindLong, device, env, cmdIdevicebackup2, "changepw")
 	if err != nil {
-		return operationError("api.password_change_failed", err, cleanBackupOutput(out))
+		return operationError(i18n.PasswordChangeFailed, err, cleanBackupOutput(out))
 	}
 
 	if e := app.secretStore.SetBackupPassword(udid, newPw); e != nil {
@@ -167,7 +167,7 @@ func (app *application) Restore(ctx context.Context, udid, password string, opts
 		dir, opts.System, opts.Settings, opts.Reboot))
 	out, err := app.runIdeviceCmdBoundedEnv(ctx, cmdKindLong, device, env, cmdIdevicebackup2, args...)
 	if err != nil {
-		return operationError("api.restore_failed", err, cleanBackupOutput(out))
+		return operationError(i18n.RestoreFailed, err, cleanBackupOutput(out))
 	}
 	app.addWarnLog(udid, "event=restore.completed")
 	return nil

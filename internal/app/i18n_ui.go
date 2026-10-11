@@ -63,7 +63,7 @@ func makeUICatalogScript() []byte {
 func handleUIMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
-		writeError(w, http.StatusMethodNotAllowed, "api.method_not_allowed")
+		writeError(w, http.StatusMethodNotAllowed, i18n.MethodNotAllowed)
 		return
 	}
 	w.Header().Del("Vary")

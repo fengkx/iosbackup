@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"iosbackup/internal/buildinfo"
+	"iosbackup/internal/i18n"
 )
 
 var errDeviceDisconnected = errors.New("device Wi-Fi connection remained unavailable; operation cancelled")
@@ -552,13 +553,13 @@ func (app *application) refreshDetails() {
 func (app *application) handleEvents(w http.ResponseWriter, r *http.Request) {
 	ip := requestIP(r)
 	if app.sseLimiter == nil || !app.sseLimiter.Acquire(ip) {
-		writeError(w, http.StatusServiceUnavailable, "api.sse_capacity")
+		writeError(w, http.StatusServiceUnavailable, i18n.SSECapacity)
 		return
 	}
 	defer app.sseLimiter.Release(ip)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "api.operation_failed")
+		writeError(w, http.StatusInternalServerError, i18n.OperationFailed)
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")

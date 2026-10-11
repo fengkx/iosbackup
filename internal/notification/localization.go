@@ -16,7 +16,7 @@ func NormalizeLanguage(language string) (string, error) {
 	case "en":
 		return "en", nil
 	default:
-		return "", i18n.NewError("api.notification_language_invalid", map[string]any{"language": language})
+		return "", i18n.NewError(i18n.NotificationLanguageInvalid, map[string]any{"language": language})
 	}
 }
 

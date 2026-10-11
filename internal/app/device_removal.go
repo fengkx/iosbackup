@@ -52,7 +52,7 @@ func (app *application) deviceRemovalBusyUnsafe(udid string) bool {
 // 配置必须先成功落盘，内存状态才会发布，避免重启后“设备重新出现”的半成功状态。
 func (app *application) removeDevice(udid string) (time.Time, error) {
 	if !udidPattern.MatchString(udid) {
-		return time.Time{}, i18n.NewError("api.invalid_udid", nil)
+		return time.Time{}, i18n.NewError(i18n.InvalidUDID, nil)
 	}
 
 	app.configPersistMu.Lock()
@@ -124,7 +124,7 @@ func (app *application) removeDevice(udid string) (time.Time, error) {
 // restoreRemovedDevice 清除归档标记并恢复一张离线设备卡片；真实在线状态由后续刷新更新。
 func (app *application) restoreRemovedDevice(udid string) error {
 	if !udidPattern.MatchString(udid) {
-		return i18n.NewError("api.invalid_udid", nil)
+		return i18n.NewError(i18n.InvalidUDID, nil)
 	}
 
 	app.configPersistMu.Lock()

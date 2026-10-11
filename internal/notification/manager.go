@@ -412,14 +412,14 @@ func ValidateTemplates(templates map[string]string) error {
 	}
 	for eventType, template := range templates {
 		if !knownTypes[eventType] {
-			return i18n.NewError("api.notification_event_unknown", map[string]any{"setting": "notification_templates", "event": eventType})
+			return i18n.NewError(i18n.NotificationEventUnknown, map[string]any{"setting": "notification_templates", "event": eventType})
 		}
 		if len(template) > 8192 {
-			return i18n.NewError("api.notification_template_length", map[string]any{"event": eventType, "max": 8192})
+			return i18n.NewError(i18n.NotificationTemplateLength, map[string]any{"event": eventType, "max": 8192})
 		}
 		for _, match := range templateVariablePattern.FindAllStringSubmatch(template, -1) {
 			if !knownVariables[match[1]] {
-				return i18n.NewError("api.notification_template_variable", map[string]any{"event": eventType, "variable": "${" + match[1] + "}"})
+				return i18n.NewError(i18n.NotificationTemplateVariable, map[string]any{"event": eventType, "variable": "${" + match[1] + "}"})
 			}
 		}
 	}
@@ -462,15 +462,15 @@ func ValidateRules(rules map[string][]string, notifiers []map[string]interface{}
 	}
 	for messageType, names := range rules {
 		if !knownTypes[messageType] {
-			return i18n.NewError("api.notification_event_unknown", map[string]any{"setting": "notification_rules", "event": messageType})
+			return i18n.NewError(i18n.NotificationEventUnknown, map[string]any{"setting": "notification_rules", "event": messageType})
 		}
 		seen := make(map[string]bool, len(names))
 		for _, name := range names {
 			if !knownNotifiers[name] {
-				return i18n.NewError("api.notification_rule_target_missing", map[string]any{"event": messageType, "channel": name})
+				return i18n.NewError(i18n.NotificationRuleTargetMissing, map[string]any{"event": messageType, "channel": name})
 			}
 			if seen[name] {
-				return i18n.NewError("api.notification_rule_target_duplicate", map[string]any{"event": messageType, "channel": name})
+				return i18n.NewError(i18n.NotificationRuleTargetDuplicate, map[string]any{"event": messageType, "channel": name})
 			}
 			seen[name] = true
 		}
@@ -481,7 +481,7 @@ func ValidateRules(rules map[string][]string, notifiers []map[string]interface{}
 // NewManagerFromConfig 根据已由应用层解密的配置构造通知管理器。
 func NewManagerFromConfig(config *Config, allowPrivate []netip.Prefix, options Options) (*Manager, error) {
 	if config == nil {
-		return nil, i18n.NewError("api.notification_config_required", nil)
+		return nil, i18n.NewError(i18n.NotificationConfigRequired, nil)
 	}
 	language, err := NormalizeLanguage(config.Language)
 	if err != nil {

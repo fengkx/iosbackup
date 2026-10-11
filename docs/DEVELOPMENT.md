@@ -83,6 +83,13 @@ Resources are local and embedded in the binary:
 - `internal/i18n/messages.json`: API messages used by Go and served to the browser at `/static/api-messages.js`.
 - `internal/notification/messages.json`: generated notification titles, default bodies and channel labels.
 
+API keys in `internal/i18n/messages.json` also generate the Go constants in `internal/i18n/codes.go`. Use `i18n.EncryptionPasswordRequired` in Go call sites instead of a literal such as `"api.encryption_password_required"`. After adding or removing a key, run `go generate ./internal/i18n` and commit the generated file with the catalog change. Do not edit `codes.go` manually or rename existing wire values during a symbol refactor. CI checks generated output without modifying it; a Go source check rejects inline API message keys in production code. Protocol tests may retain literal values to detect accidental compatibility changes.
+
+```bash
+go generate ./internal/i18n
+go run ./internal/i18n/cmd/gencodes -dir internal/i18n -check
+```
+
 Use semantic keys and complete messages with named parameters (`{name}` for UI/API, `${name}` for notification templates). Parameter names must match in every language. Do not concatenate sentence fragments, derive keys from translated text, or branch on a translated label. Preserve device names, paths and custom templates. Known failures return a stable `message_code` and `params`; `code` retains any existing endpoint-specific classification (new endpoints default to the message key). Compatibility `error`/`message` fields remain readable, while raw tool output belongs in diagnostic `detail`. UI actions translate `message_code`, with `code` as a compatibility fallback, including when the language changes after an operation. SSE broadcasts machine states and standard timestamps, never one browser's translated state.
 
 Keep interface language, notification language and scheduling separate. Notification `language` is persisted per deployment; omitted language remains `zh-CN` for compatibility. An empty body override selects the built-in template at send time. Existing nonempty templates are user content, even when they match an older Chinese default: preserve them until the administrator clears them. Switching interface language does not change notification delivery or backup times. Scheduling and displayed times continue to use `Asia/Shanghai`; new `last_backup_at` timestamps include an offset while `last_backup` remains for older clients.

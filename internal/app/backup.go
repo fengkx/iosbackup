@@ -131,7 +131,7 @@ func (app *application) performBackupInTask(udid string) (retErr error) {
 	// 检查设备是否已经在备份中
 	if app.backupInProgress[udid] {
 		app.mu.Unlock()
-		return i18n.NewError("api.busy", nil)
+		return i18n.NewError(i18n.Busy, nil)
 	}
 
 	// 标记设备为备份中状态
@@ -150,20 +150,20 @@ func (app *application) performBackupInTask(udid string) (retErr error) {
 	}()
 
 	if !exists {
-		return i18n.NewError("api.device_not_found", nil)
+		return i18n.NewError(i18n.DeviceNotFound, nil)
 	}
 
 	if !configExists {
-		return i18n.NewError("api.config_invalid", nil)
+		return i18n.NewError(i18n.ConfigInvalid, nil)
 	}
 
 	// 检查备份条件
 	if config.OnlyWhenCharging && !device.IsCharging {
-		return i18n.NewError("api.not_charging", nil)
+		return i18n.NewError(i18n.NotCharging, nil)
 	}
 
 	if device.BatteryLevel < config.MinBatteryLevel {
-		return i18n.NewError("api.low_battery", map[string]any{"battery": device.BatteryLevel, "min_battery": config.MinBatteryLevel})
+		return i18n.NewError(i18n.LowBattery, map[string]any{"battery": device.BatteryLevel, "min_battery": config.MinBatteryLevel})
 	}
 
 	backupLog("event=backup.started")
@@ -326,7 +326,7 @@ func (app *application) performBackupWithConnection(udid, connectionType, sessio
 	// 检查设备是否已经在备份中
 	if app.backupInProgress[udid] {
 		app.mu.Unlock()
-		return i18n.NewError("api.busy", nil)
+		return i18n.NewError(i18n.Busy, nil)
 	}
 
 	// 标记设备为备份中状态
@@ -344,11 +344,11 @@ func (app *application) performBackupWithConnection(udid, connectionType, sessio
 	}()
 
 	if !exists {
-		return i18n.NewError("api.device_not_found", nil)
+		return i18n.NewError(i18n.DeviceNotFound, nil)
 	}
 
 	if !configExists {
-		return i18n.NewError("api.config_invalid", nil)
+		return i18n.NewError(i18n.ConfigInvalid, nil)
 	}
 
 	backupDir := config.BackupDirectory

@@ -54,13 +54,13 @@ func (app *application) Unback(ctx context.Context, udid string) error {
 	}
 	finalPath := filepath.Join(backupPath, "_unback_")
 	if _, err := os.Lstat(finalPath); err == nil {
-		return i18n.NewError("api.unpack_exists", map[string]any{"path": finalPath})
+		return i18n.NewError(i18n.UnpackExists, map[string]any{"path": finalPath})
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return operationError("api.unpack_failed", err, "")
+		return operationError(i18n.UnpackFailed, err, "")
 	}
 	stagingPath, err := os.MkdirTemp(backupPath, ".iosbackup-unback-")
 	if err != nil {
-		return operationError("api.directory_create_failed", err, "")
+		return operationError(i18n.DirectoryCreateFailed, err, "")
 	}
 	published := false
 	defer func() {
@@ -120,7 +120,7 @@ func (app *application) Unback(ctx context.Context, udid string) error {
 		message := fmt.Sprintf("event=unpack.failed error=%v", err)
 		app.addErrorLog(udid, message)
 		app.notifySystemEvent("unpack_failed", map[string]string{"device_name": udid, "diagnostics": message})
-		return operationError("api.unpack_failed", err, "")
+		return operationError(i18n.UnpackFailed, err, "")
 	}
 	summary.CompletedAt = nowBeijing().Format(time.RFC3339)
 	marker, err := json.MarshalIndent(summary, "", "  ")
@@ -143,7 +143,7 @@ func (app *application) Unback(ctx context.Context, udid string) error {
 
 func (app *application) acquireLocalBackupOp(udid string) (string, func(), error) {
 	if !udidPattern.MatchString(udid) {
-		return "", nil, i18n.NewError("api.invalid_udid", nil)
+		return "", nil, i18n.NewError(i18n.InvalidUDID, nil)
 	}
 	app.mu.Lock()
 	if err := app.deviceRemovalBlockedUnsafe(udid); err != nil {
@@ -152,7 +152,7 @@ func (app *application) acquireLocalBackupOp(udid string) (string, func(), error
 	}
 	if app.backupInProgress[udid] || app.checkInProgress[udid] {
 		app.mu.Unlock()
-		return "", nil, i18n.NewError("api.busy", nil)
+		return "", nil, i18n.NewError(i18n.Busy, nil)
 	}
 	if err := app.connectionAdmissionUnsafe(nil); err != nil {
 		app.mu.Unlock()
@@ -186,7 +186,7 @@ func requirePlainSQLiteManifest(manifestPath string) error {
 		return fmt.Errorf("incomplete Manifest.db: %w", err)
 	}
 	if string(header) != "SQLite format 3\x00" {
-		return i18n.NewError("api.unpack_unencrypted_required", nil)
+		return i18n.NewError(i18n.UnpackUnencryptedRequired, nil)
 	}
 	return nil
 }
