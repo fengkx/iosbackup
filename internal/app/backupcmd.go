@@ -13,35 +13,37 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"iosbackup/internal/i18n"
 )
 
 // checkBackupDir 校验一个备份保存目录是否可用：落在映射到主机的挂载点上、能创建/已存在、可写、
-// 且未被文件占用。返回 (ok, 中文原因)。不限制在 /backups 内，允许任意已挂载到主机的绝对路径。
-func checkBackupDir(path string) (bool, string) {
+// 且未被文件占用。失败返回稳定消息码。不限制在 /backups 内，允许任意已挂载到主机的绝对路径。
+func checkBackupDir(path string) (bool, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return false, "请填写保存位置"
+		return false, i18n.NewError("api.directory_required", nil)
 	}
 	if !filepath.IsAbs(path) {
-		return false, "请使用绝对路径（以 / 开头）"
+		return false, i18n.NewError("api.directory_absolute", nil)
 	}
 	if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
-		return false, "该路径已被一个文件占用，请换一个文件夹"
+		return false, i18n.NewError("api.directory_is_file", nil)
 	}
 	// 本程序跑在容器里：只有映射到主机（落在 bind mount 上）的目录才会持久化。写进容器自身的
 	// overlay 层或 tmpfs（如 /run、/tmp）的备份会在容器重建后丢失，所以先拦掉这种「能写但留不住」的路径。
 	if persisted, knowable := pathPersistsToHost(path); knowable && !persisted {
-		return false, "这个目录没有映射到主机，备份会写进容器内部、容器重建后丢失；请改用已挂载到主机的目录（例如 /backups 下的路径）"
+		return false, i18n.NewError("api.directory_not_persistent", nil)
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
-		return false, "无法创建该文件夹：" + err.Error()
+		return false, operationError("api.directory_create_failed", err, "")
 	}
 	tmp := filepath.Join(path, ".iosbk_write_test")
 	if err := os.WriteFile(tmp, []byte("ok"), 0o644); err != nil {
-		return false, "文件夹不可写：" + err.Error()
+		return false, operationError("api.directory_not_writable", err, "")
 	}
 	_ = os.Remove(tmp)
-	return true, ""
+	return true, nil
 }
 
 // ephemeralFS 是「不会持久化到主机」的文件系统类型集合：容器自身的联合文件系统（overlay/aufs）
@@ -132,7 +134,7 @@ func unescapeMountField(s string) string {
 // 安全：拒绝非法 UDID；备份/检查进行中拒绝；只删 <备份目录>/<udid>；删后重置 LastBackup。
 func (app *application) DeleteDeviceBackup(udid string) error {
 	if udid == "" || strings.ContainsAny(udid, `/\`) || strings.Contains(udid, "..") {
-		return fmt.Errorf("非法设备标识，已中止")
+		return i18n.NewError("api.invalid_udid", nil)
 	}
 	path, release, err := app.acquireLocalBackupOp(udid)
 	if err != nil {
@@ -140,13 +142,13 @@ func (app *application) DeleteDeviceBackup(udid string) error {
 	}
 	defer release()
 	if filepath.Base(path) != udid { // 双保险：路径必须以 udid 结尾，避免误删上级目录
-		return fmt.Errorf("备份路径异常，已中止")
+		return i18n.NewError("api.backup_path_invalid", nil)
 	}
 	if fi, statErr := os.Stat(path); statErr != nil || !fi.IsDir() {
-		return fmt.Errorf("没有找到该设备的本地备份")
+		return i18n.NewError("api.backup_missing", nil)
 	}
 	if removeErr := os.RemoveAll(path); removeErr != nil {
-		return fmt.Errorf("删除失败: %w", removeErr)
+		return operationError("api.backup_delete_failed", removeErr, "")
 	}
 	app.mu.Lock()
 	if d, ok := app.devices[udid]; ok {
@@ -315,14 +317,14 @@ func (app *application) backupDeviceContext(udid string) (*device, string, error
 		return nil, "", err
 	}
 	if app.backupInProgress[udid] {
-		return nil, "", fmt.Errorf("设备 %s 正在备份中，请稍后再试", udid)
+		return nil, "", i18n.NewError("api.busy", nil)
 	}
 	device, ok := app.devices[udid]
 	if !ok {
-		return nil, "", fmt.Errorf("设备 %s 不存在", udid)
+		return nil, "", i18n.NewError("api.device_not_found", nil)
 	}
 	if !device.IsOnline {
-		return nil, "", fmt.Errorf("设备 %s 当前离线", udid)
+		return nil, "", i18n.NewError("api.device_offline", nil)
 	}
 	dir := dirBackups
 	if cfg, ok := app.configs[udid]; ok && cfg.BackupDirectory != "" {
@@ -372,7 +374,7 @@ func (app *application) BackupInfo(ctx context.Context, udid string) ([]byte, er
 	errTail := newTailBuffer(maxCommandErrorBytes)
 	err = app.runIdeviceCmdStreamEnv(ctx, cmdKindMedium, device, app.backupPasswordEnv(udid), cmdIdevicebackup2, out, errTail, "info", dir)
 	if err != nil {
-		return out.Bytes(), fmt.Errorf("获取备份信息失败: %w（%s）", err, strings.TrimSpace(errTail.String()))
+		return out.Bytes(), operationError("api.backup_info_failed", err, errTail.String())
 	}
 	// 清洗掉下载 manifest 的进度条/ANSI 噪声，只留真实信息
 	cleaned := cleanBackupOutput(out.Bytes())
@@ -442,11 +444,11 @@ func (app *application) streamBackupList(ctx context.Context, udid string, onRow
 		errOutput := stderr.Bytes()
 		if isEncryptedBackupError(errOutput) {
 			if len(pwEnv) == 0 {
-				return total, fmt.Errorf("备份已加密，但本服务没有保存该设备的备份密码（多半是在设备/Finder 上开启的加密），无法列出文件清单；占用空间仍可查看")
+				return total, i18n.NewError("api.backup_password_missing", nil)
 			}
-			return total, fmt.Errorf("备份已加密，但保存的备份密码不正确，无法列出文件清单；请在「加密」页用正确密码重新开启")
+			return total, i18n.NewError("api.backup_password_incorrect", nil)
 		}
-		return total, fmt.Errorf("列出备份失败: %w（%s）", cmdErr, strings.TrimSpace(stderr.String()))
+		return total, operationError("api.backup_list_failed", cmdErr, stderr.String())
 	}
 	return total, nil
 }

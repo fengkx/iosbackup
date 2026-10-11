@@ -33,7 +33,7 @@ func (a *authManager) Middleware(next http.Handler) http.Handler {
 				http.Redirect(w, r, "/login?"+url.Values{"next": {nextURL}}.Encode(), http.StatusSeeOther)
 				return
 			}
-			writeError(w, http.StatusUnauthorized, "未认证")
+			writeError(w, http.StatusUnauthorized, "api.unauthenticated")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -59,15 +59,15 @@ func (c *csrfManager) Middleware(next http.Handler) http.Handler {
 		}
 		fetchSite := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
 		if fetchSite == "cross-site" {
-			writeError(w, http.StatusForbidden, "跨站请求已拒绝")
+			writeError(w, http.StatusForbidden, "api.cross_site_rejected")
 			return
 		}
 		if !requestOriginAllowed(r) {
-			writeError(w, http.StatusForbidden, "Origin 不匹配")
+			writeError(w, http.StatusForbidden, "api.origin_mismatch")
 			return
 		}
 		if !constantTokenEqual(r.Header.Get(csrfHeader), c.Token()) {
-			writeError(w, http.StatusForbidden, "CSRF token 无效")
+			writeError(w, http.StatusForbidden, "api.csrf_invalid")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -114,16 +114,16 @@ func bodyLimitMiddleware(next http.Handler) http.Handler {
 			limit = configBodyLimit
 		}
 		if r.ContentLength > limit {
-			writeError(w, http.StatusRequestEntityTooLarge, "请求体过大")
+			writeError(w, http.StatusRequestEntityTooLarge, "api.request_too_large")
 			return
 		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "读取请求体失败")
+			writeError(w, http.StatusBadRequest, "api.request_read_failed")
 			return
 		}
 		if int64(len(body)) > limit {
-			writeError(w, http.StatusRequestEntityTooLarge, "请求体过大")
+			writeError(w, http.StatusRequestEntityTooLarge, "api.request_too_large")
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
@@ -152,7 +152,7 @@ func decodeRequestJSON(r *http.Request, target any) error {
 	var extra any
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err == nil {
-			return errors.New("JSON 只能包含一个值")
+			return errors.New("JSON must contain a single value")
 		}
 		return err
 	}

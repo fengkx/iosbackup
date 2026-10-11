@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"iosbackup/internal/i18n"
 )
 
 // loadPairedDevices 从lockdown目录加载已配对的设备（不获取锁，假设调用者已持有锁）
@@ -17,7 +19,7 @@ func (app *application) loadPairedDevices() map[string]*device {
 	// 读取lockdown目录
 	files, err := os.ReadDir(lockdownDir)
 	if err != nil {
-		log.Printf("无法读取lockdown目录: %v", err)
+		log.Printf("event=pairing.records_read_failed error=%v", err)
 		return pairedDevices
 	}
 
@@ -33,9 +35,9 @@ func (app *application) loadPairedDevices() map[string]*device {
 			// 创建离线设备
 			device := &device{
 				UDID:         udid,
-				Name:         "Unknown Device",
+				Name:         udid,
 				DeviceType:   "iPhone",
-				Connection:   "离线",
+				Connection:   "offline",
 				IsOnline:     false,
 				BatteryLevel: 0,
 				IsCharging:   false,
@@ -58,24 +60,24 @@ func (app *application) loadPairedDevices() map[string]*device {
 func connectionTypeDesc(connection string) string {
 	switch connection {
 	case connectTypeUSB:
-		return "USB 已连接"
+		return connectTypeUSB
 	case connectTypeNetwork:
-		return "WI-FI 已连接"
+		return connectTypeNetwork
 	default:
-		return "未知连接"
+		return "unknown"
 	}
 }
 
-// connTypeFromDesc 将连接类型描述（中文）反向映射回 connectTypeUSB/connectTypeNetwork。
+// connTypeFromDesc 保留内部调用名；连接值现在始终是机器码，不解析展示文案。
 func connTypeFromDesc(desc string) string {
-	if strings.Contains(strings.ToLower(desc), "wi-fi") || strings.Contains(strings.ToLower(desc), "network") {
+	if desc == connectTypeNetwork {
 		return connectTypeNetwork
 	}
 	return connectTypeUSB
 }
 
 func isNetworkConnection(connectionDesc string) bool {
-	return strings.Contains(strings.ToLower(connectionDesc), "wi-fi")
+	return connectionDesc == connectTypeNetwork
 }
 
 // RefreshDevices 刷新设备列表
@@ -88,7 +90,7 @@ func (app *application) RefreshDevices() error {
 	app.mu.Lock()
 	if len(app.backupInProgress) > 0 {
 		app.mu.Unlock()
-		return fmt.Errorf("设备正在执行任务，请稍后刷新")
+		return i18n.NewError("api.busy", nil)
 	}
 	app.deviceRefreshGeneration++
 	generation := app.deviceRefreshGeneration
@@ -166,7 +168,7 @@ func (app *application) pairDeviceAndUpdateInfoInTask(device device, generation 
 		app.deviceRefreshGeneration == generation && app.connectionEpochUnsafe(&device) == epoch &&
 		config.RemovedAt == nil &&
 		!app.deviceRemovalPending[device.UDID] {
-		if device.Name != "Unknown Device" && device.Name != "" {
+		if device.Name != "" {
 			config.Name = device.Name
 			needSaveConfig = true
 		}
@@ -180,7 +182,7 @@ func (app *application) pairDeviceAndUpdateInfoInTask(device device, generation 
 	// 在锁外保存配置和记录日志
 	if needSaveConfig {
 		app.saveConfigs()
-		app.addLog(device.UDID, fmt.Sprintf("设备信息已更新：%s", device.Name))
+		app.addLog(device.UDID, fmt.Sprintf("event=device.info_updated name=%s", device.Name))
 	}
 }
 
@@ -218,12 +220,12 @@ func (app *application) getDeviceInfoInTask(device *device) {
 		deviceName := strings.TrimSpace(string(output))
 		if deviceName != "" && deviceName != device.Name {
 			device.Name = deviceName
-			app.addDebugLog(device.UDID, fmt.Sprintf("获取设备名称成功: %s", deviceName))
+			app.addDebugLog(device.UDID, fmt.Sprintf("event=device.name_read name=%s", deviceName))
 		} else if deviceName == "" {
-			app.addDebugLog(device.UDID, "获取设备名称为空")
+			app.addDebugLog(device.UDID, "event=device.name_empty")
 		}
 	} else {
-		app.addWarnLog(device.UDID, fmt.Sprintf("获取设备名称失败: %v", err))
+		app.addWarnLog(device.UDID, fmt.Sprintf("event=device.name_read_failed error=%v", err))
 	}
 
 	// 获取设备类型
@@ -245,13 +247,13 @@ func (app *application) getDeviceInfoInTask(device *device) {
 
 	// 默认值
 	if device.Name == "" {
-		device.Name = "Unknown Device"
+		device.Name = device.UDID
 	}
 	if device.DeviceType == "" {
 		device.DeviceType = "iPhone"
 	}
 	if device.Connection == "" {
-		device.Connection = "未知连接"
+		device.Connection = "unknown"
 	}
 }
 func (app *application) RefreshDevicesStatus() {
