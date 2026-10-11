@@ -31,3 +31,6 @@ configs/.secret_key-*
 configs/.auth_credentials.json-*
 configs/.csrf_secret.json-*
 configs/.secrets.enc-*
+
+# 官网构建与备份服务容器隔离
+website/

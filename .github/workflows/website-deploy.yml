@@ -1,0 +1,103 @@
+name: Publish website
+
+on:
+  workflow_dispatch:
+    inputs:
+      docs_commit:
+        description: '文档提交完整 SHA；留空使用本次所选 main 提交（须已审核）'
+        required: false
+        type: string
+      product_version:
+        description: '已发布产品标签；留空使用 website/source-lock.json 中的版本'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-production
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # 只有公开仓库 main 上的已审核网站代码可以运行生产部署。
+    if: github.repository == 'razeencheng/iosbackup' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: website-production
+      url: https://iosbackup.isw.app
+    defaults:
+      run:
+        working-directory: website
+        shell: bash
+    steps:
+      - name: Checkout selected website revision
+        # actions/checkout v6.1.0
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node
+        # actions/setup-node v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+
+      - name: Build reviewed public documentation
+        env:
+          IOSBK_SITE_DOCS_COMMIT: ${{ inputs.docs_commit || github.sha }}
+          IOSBK_SITE_PRODUCT_VERSION: ${{ inputs.product_version }}
+        run: npm run build:release
+
+      - name: Record exact build sources
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const source = JSON.parse(readFileSync('dist/source.json', 'utf8'));
+          if (source.mode !== 'release') throw new Error('Refusing to publish a preview build');
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Website build',
+            '',
+            `- Product: ${source.productVersion}`,
+            `- Docs commit: ${source.docsCommit}`,
+            `- Website commit: ${source.websiteCommit}`,
+            '',
+            'The release artifact contains source.json for reproducing this build.',
+            '',
+          ].join('\n'));
+          NODE
+
+      - name: Save release artifact
+        # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: website-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: website/dist
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Deploy to Cloudflare Workers Static Assets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo '::error::Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the website-production environment.'
+            exit 1
+          fi
+          npx --no-install wrangler deploy
+
+      - name: Record successful deployment
+        run: |
+          printf '\nPublished to https://iosbackup.isw.app\n' >> "$GITHUB_STEP_SUMMARY"

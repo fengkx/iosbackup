@@ -20,6 +20,7 @@ Before enabling a schedule, **complete one USB backup on a non-critical device**
 | [Inspect backups and export file lists](manual/inspection.md) | Understand the 5,000-entry limit and what CSV contains |
 | [Configure and verify notifications](manual/notifications.md) | Save rules, check test delivery and observe a real event |
 | [Manage devices and storage](manual/device-storage.md) | Remove and re-add devices, check capacity and protect copies |
+| [Restore device data: overview and preparation](manual/restore.md) | Protect the backup and check Finder / Apple Devices prerequisites and validation gaps |
 | [Back up, migrate and recover the instance](manual/instance-recovery.md) | Protect the key, configuration, pairing records and backup sets together |
 | [Upgrade and rollback](manual/upgrade.md) | Pin images, validate the upgrade and retain a rollback path |
 | [Evaluate experimental operations](manual/experimental.md) | Understand the requirements, risks, and tested scope of unpack, deletion, and device restore |

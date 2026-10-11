@@ -1,0 +1,36 @@
+{
+  "name": "iosbackup-website",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "prepare:docs": "node scripts/prepare.mjs",
+    "dev": "npm run prepare:docs && ASTRO_TELEMETRY_DISABLED=1 astro dev --host 127.0.0.1",
+    "build": "npm run prepare:docs && ASTRO_TELEMETRY_DISABLED=1 astro build && node scripts/check-site.mjs",
+    "build:release": "node scripts/prepare.mjs --release && ASTRO_TELEMETRY_DISABLED=1 astro build && node scripts/check-site.mjs",
+    "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview --host 127.0.0.1",
+    "check:site": "node scripts/check-site.mjs"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "7.3.0",
+    "@astrojs/sitemap": "3.7.4",
+    "@astrojs/starlight": "0.42.6",
+    "astro": "7.3.8",
+    "mdast-util-to-string": "4.0.0",
+    "remark": "15.0.1",
+    "remark-gfm": "4.0.1",
+    "unist-util-visit": "5.1.0"
+  },
+  "devDependencies": {
+    "cheerio": "1.1.2",
+    "wrangler": "4.149.0"
+  },
+  "overrides": {
+    "postcss-nested": {
+      "postcss-selector-parser": "7.1.6"
+    }
+  }
+}
