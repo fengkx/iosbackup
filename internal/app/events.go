@@ -420,13 +420,19 @@ func (app *application) applyPresenceSnapshotValid(online, networkOnline map[str
 			d.LastSeen = now
 			d.Connection = od.Connection
 		} else {
-			app.devices[udid] = &device{UDID: udid, Name: udid, IsOnline: true, Connection: od.Connection, LastSeen: now}
+			d := &device{UDID: udid, IsOnline: true, Connection: od.Connection, LastSeen: now}
+			var savedName string
+			if config := app.configs[udid]; config != nil {
+				savedName = config.Name
+			}
+			d.applyNameFallback(savedName)
+			app.devices[udid] = d
 			newOnline = true
-			presenceNotifications = append(presenceNotifications, pendingPresenceNotification{udid: udid, name: udid, online: true})
+			presenceNotifications = append(presenceNotifications, pendingPresenceNotification{udid: udid, name: d.Name, online: true})
 		}
 		delete(app.devicePresenceMissingSince, udid)
 		// 发现即建默认配置，保证「立即备份」可用（首页提速后不再在请求路径上建配置）
-		if app.ensureConfigUnsafe(udid, app.devices[udid].Name) {
+		if app.ensureConfigUnsafe(udid, app.devices[udid].knownName()) {
 			configCreated = true
 		}
 	}
@@ -544,6 +550,7 @@ func (app *application) refreshDetails() {
 	for _, copy := range copies {
 		if d := app.devices[copy.UDID]; d != nil && d.IsOnline && !d.PresenceUnknown && d.Connection == copy.Connection && app.connectionEpochUnsafe(d) == epochs[d.UDID] {
 			d.Name, d.DeviceType, d.BatteryLevel, d.IsCharging = copy.Name, copy.DeviceType, copy.BatteryLevel, copy.IsCharging
+			d.nameIsFallback = copy.nameIsFallback
 		}
 	}
 }

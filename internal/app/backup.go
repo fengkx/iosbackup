@@ -224,7 +224,9 @@ func (app *application) performBackupInTask(udid string) (retErr error) {
 		config.LastBackup = backupTime
 		config.LastBackupConnection = connTypeFromDesc(connType)
 		if device, exists := app.devices[udid]; exists {
-			config.Name = device.Name
+			if name := device.knownName(); name != "" {
+				config.Name = name
+			}
 		}
 	}
 	app.mu.Unlock()
@@ -422,7 +424,9 @@ func (app *application) performBackupWithConnection(udid, connectionType, sessio
 			config.LastBackupConnection = connectTypeUSB
 		}
 		if device, exists := app.devices[udid]; exists {
-			config.Name = device.Name
+			if name := device.knownName(); name != "" {
+				config.Name = name
+			}
 		}
 	}
 	app.mu.Unlock()

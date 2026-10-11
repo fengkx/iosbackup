@@ -11,6 +11,26 @@ import (
 	"iosbackup/internal/i18n"
 )
 
+// knownName 只返回已保存或成功读取的名称，供配置持久化使用。
+func (d *device) knownName() string {
+	if d.nameIsFallback {
+		return ""
+	}
+	return d.Name
+}
+
+// applyNameFallback 保留已知名称，其次使用配置中的名称，最后才显示 UDID。
+func (d *device) applyNameFallback(savedName string) {
+	if d.knownName() != "" {
+		return
+	}
+	d.Name = savedName
+	d.nameIsFallback = savedName == ""
+	if d.nameIsFallback {
+		d.Name = d.UDID
+	}
+}
+
 // loadPairedDevices 从lockdown目录加载已配对的设备（不获取锁，假设调用者已持有锁）
 func (app *application) loadPairedDevices() map[string]*device {
 	pairedDevices := make(map[string]*device)
@@ -35,7 +55,6 @@ func (app *application) loadPairedDevices() map[string]*device {
 			// 创建离线设备
 			device := &device{
 				UDID:         udid,
-				Name:         udid,
 				DeviceType:   "iPhone",
 				Connection:   "offline",
 				IsOnline:     false,
@@ -49,6 +68,7 @@ func (app *application) loadPairedDevices() map[string]*device {
 				device.Name = config.Name
 				device.LastBackup = config.LastBackup
 			}
+			device.applyNameFallback("")
 
 			pairedDevices[udid] = device
 		}
@@ -151,7 +171,7 @@ func (app *application) pairDeviceAndUpdateInfoInTask(device device, generation 
 	app.pairDeviceInTask(&device)
 
 	// 配对完成后重新获取设备信息
-	app.getDeviceInfoInTask(&device)
+	nameRead := app.getDeviceInfoInTask(&device)
 
 	// 更新配置中的设备名称
 	var needSaveConfig bool
@@ -159,6 +179,7 @@ func (app *application) pairDeviceAndUpdateInfoInTask(device device, generation 
 	if app.deviceRefreshGeneration == generation && app.connectionEpochUnsafe(&device) == epoch {
 		if current, exists := app.devices[device.UDID]; exists && current.Connection == device.Connection {
 			current.Name = device.Name
+			current.nameIsFallback = device.nameIsFallback
 			current.DeviceType = device.DeviceType
 			current.BatteryLevel = device.BatteryLevel
 			current.IsCharging = device.IsCharging
@@ -168,8 +189,8 @@ func (app *application) pairDeviceAndUpdateInfoInTask(device device, generation 
 		app.deviceRefreshGeneration == generation && app.connectionEpochUnsafe(&device) == epoch &&
 		config.RemovedAt == nil &&
 		!app.deviceRemovalPending[device.UDID] {
-		if device.Name != "" {
-			config.Name = device.Name
+		if name := device.knownName(); nameRead && name != "" && config.Name != name {
+			config.Name = name
 			needSaveConfig = true
 		}
 		if device.DeviceType != "" && config.DeviceType != device.DeviceType {
@@ -214,14 +235,20 @@ func (app *application) getDeviceInfo(device *device) {
 	app.getDeviceInfoInTask(device)
 }
 
-func (app *application) getDeviceInfoInTask(device *device) {
+// 返回本次是否成功读取非空名称，避免把旧缓存当作本次查询结果持久化。
+func (app *application) getDeviceInfoInTask(device *device) bool {
+	var nameRead bool
 	// 获取设备名称（短命令）
 	if output, err := app.runIdeviceCmd(app.rootCtx, cmdKindShort, device, cmdIdeviceInfo, "-k", "DeviceName"); err == nil {
 		deviceName := strings.TrimSpace(string(output))
-		if deviceName != "" && deviceName != device.Name {
+		if deviceName != "" {
+			if deviceName != device.Name {
+				app.addDebugLog(device.UDID, fmt.Sprintf("event=device.name_read name=%s", deviceName))
+			}
 			device.Name = deviceName
-			app.addDebugLog(device.UDID, fmt.Sprintf("event=device.name_read name=%s", deviceName))
-		} else if deviceName == "" {
+			device.nameIsFallback = false
+			nameRead = true
+		} else {
 			app.addDebugLog(device.UDID, "event=device.name_empty")
 		}
 	} else {
@@ -246,15 +273,20 @@ func (app *application) getDeviceInfoInTask(device *device) {
 	}
 
 	// 默认值
-	if device.Name == "" {
-		device.Name = device.UDID
+	app.mu.RLock()
+	var savedName string
+	if config := app.configs[device.UDID]; config != nil {
+		savedName = config.Name
 	}
+	app.mu.RUnlock()
+	device.applyNameFallback(savedName)
 	if device.DeviceType == "" {
 		device.DeviceType = "iPhone"
 	}
 	if device.Connection == "" {
 		device.Connection = "unknown"
 	}
+	return nameRead
 }
 func (app *application) RefreshDevicesStatus() {
 	app.refreshPresence()

@@ -203,6 +203,7 @@ func (app *application) updateDeviceStatusForBackup(device *device, deviceStatus
 	}
 	if current, ok := app.devices[device.UDID]; ok && !current.PresenceUnknown && current.Connection == deviceStatus.Connection {
 		current.Name = device.Name
+		current.nameIsFallback = device.nameIsFallback
 		current.DeviceType = device.DeviceType
 		current.BatteryLevel = device.BatteryLevel
 		current.IsCharging = device.IsCharging
