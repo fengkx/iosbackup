@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+src/content/docs/
+src/generated/
+public/manual-assets/
+public/source.json
+public/robots.txt
+public/_headers

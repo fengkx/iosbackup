@@ -1,0 +1,10 @@
+---
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+import build from '../generated/build.json';
+const zh=Astro.url.pathname.startsWith('/zh-cn/');
+const page=build.pages.find(p=>p.route===Astro.url.pathname);
+---
+<p class="release-note" data-pagefind-ignore>{build.mode==='release' ? (zh?'适用版本':'For release') : (zh?'工作区预览 · 内容待发布审核':'Workspace preview · content awaiting release review')} <strong>{build.productVersion}</strong></p>
+<Default />
+{page && <p class="source-note" data-pagefind-ignore><a href={`https://github.com/razeencheng/iosbackup/blob/${build.docsCommit || 'main'}/${page.source}`}>{zh?'查看 Markdown 来源':'View Markdown source'}</a> {build.mode!=='release' && <span>· {zh?'预览包含本地修改，GitHub 可能尚无此修订。':'Local edits may not yet be on GitHub.'}</span>}</p>}
+<style>.release-note{font-size:.78rem;color:var(--sl-color-gray-2);margin-bottom:.3rem}.release-note strong{white-space:nowrap}.source-note{font-size:.78rem;color:var(--sl-color-gray-2);margin-top:1rem}</style>

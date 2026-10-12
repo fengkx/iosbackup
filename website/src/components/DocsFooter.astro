@@ -1,0 +1,13 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro';
+const zh=Astro.url.pathname.startsWith('/zh-cn/');
+const repo='https://github.com/razeencheng/iosbackup';
+---
+<Default />
+<nav aria-label={zh?'项目链接':'Project links'} class="project-links">
+<a href={`${repo}/issues/new/choose`}>{zh?'报告文档问题':'Report a docs issue'}</a>
+<a href={`${repo}/blob/main/CONTRIBUTING.md`}>{zh?'参与贡献':'Contribute'}</a>
+<a href={`${repo}/blob/main/SECURITY.md`}>{zh?'安全报告':'Security'}</a>
+<a href={`${repo}/releases`}>{zh?'更新记录':'Releases'}</a>
+</nav>
+<style>.project-links{display:flex;flex-wrap:wrap;gap:.6rem 1.2rem;margin-top:2rem;font-size:.8rem}</style>

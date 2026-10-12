@@ -1,0 +1,33 @@
+name: Website checks
+on:
+  pull_request:
+    paths: ['website/**', 'docs/**', '.github/workflows/website.yml', '.github/workflows/website-deploy.yml']
+  push:
+    branches: [main]
+    paths: ['website/**', 'docs/**', '.github/workflows/website.yml', '.github/workflows/website-deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  website:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website-preview
+          path: website/dist
+          retention-days: 7

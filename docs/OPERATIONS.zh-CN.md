@@ -20,6 +20,7 @@
 | [查看备份信息和导出清单](manual/inspection.zh-CN.md) | 理解 5000 项限制、CSV 与完整数据的区别 |
 | [设置并验证通知](manual/notifications.zh-CN.md) | 保存规则、检查测试送达、观察真实事件 |
 | [管理设备和存储](manual/device-storage.zh-CN.md) | 移除设备、重新添加、检查空间和保留副本 |
+| [恢复手机数据：总览与准备](manual/restore.zh-CN.md) | 先保护现有备份，查看 Finder / Apple Devices 的前提与待验证范围 |
 | [备份、迁移和恢复部署实例](manual/instance-recovery.zh-CN.md) | 同时保护主密钥、配置、配对记录和备份集 |
 | [升级与回滚](manual/upgrade.zh-CN.md) | 固定镜像版本，验证升级结果并保留回退路径 |
 | [评估实验操作](manual/experimental.zh-CN.md) | 了解解包、删除、整机恢复的启用条件、风险和已验证范围 |

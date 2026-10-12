@@ -1,0 +1,13 @@
+---
+const locale=Astro.url.pathname.startsWith('/zh-cn/')?'zh-cn':'en';
+const other=locale === 'en'?'zh-cn':'en';
+const href=Astro.url.pathname.replace(/^\/(en|zh-cn)(?=\/)/,`/${other}`);
+---
+<a class="language" href={href} lang={other==='zh-cn'?'zh-CN':'en'} data-language={other} aria-label={other==='en'?'Switch to English':'切换到简体中文'}>{other==='en'?'EN':'中文'}</a>
+<script>
+  document.addEventListener('click',(event)=>{
+    const target=event.target instanceof Element?event.target.closest<HTMLAnchorElement>('[data-language]'):null;
+    if(target) { try { localStorage.setItem('iosbackup-site-language',target.dataset.language!); } catch {} }
+  });
+</script>
+<style>.language{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0 .55rem;border:1px solid #a9b7c9;border-radius:6px;color:inherit;text-decoration:none;font-size:14px;font-weight:600}.language:hover{color:#2c62c6;border-color:#2c62c6}.language:focus-visible{outline:3px solid #719cec;outline-offset:3px}</style>

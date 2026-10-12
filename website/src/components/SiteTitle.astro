@@ -1,0 +1,5 @@
+---
+const locale=Astro.url.pathname.startsWith('/zh-cn/')?'zh-cn':'en';
+---
+<a class="site-brand" href={`/${locale}/`}><img src="/assets/logo-mark.png" alt="" width="36" height="36"/><span>iOS Backup</span></a>
+<style>.site-brand{display:flex;align-items:center;gap:.6rem;color:var(--sl-color-white);font-weight:650;text-decoration:none;white-space:nowrap}.site-brand img{width:36px;height:36px}@media(max-width:400px){.site-brand span{font-size:15px}}</style>

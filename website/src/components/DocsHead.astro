@@ -1,0 +1,12 @@
+---
+import Default from '@astrojs/starlight/components/Head.astro';
+import build from '../generated/build.json';
+const pathname=Astro.url.pathname;
+const localized=/^\/(en|zh-cn)\//.test(pathname);
+---
+<Default />
+{build.mode!=='release' && <meta name="robots" content="noindex,nofollow" />}
+{localized && <>
+<link rel="alternate" hreflang="en" href={new URL(pathname.replace(/^\/(en|zh-cn)\//,'/en/'),Astro.site)} />
+<link rel="alternate" hreflang="zh-CN" href={new URL(pathname.replace(/^\/(en|zh-cn)\//,'/zh-cn/'),Astro.site)} />
+</>}
