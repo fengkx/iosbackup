@@ -15,7 +15,7 @@ iOS Backup 的 Go 应用本身仅使用 Go 标准库，源码采用 `AGPL-3.0-on
 | libimobiledevice | `fa0f7919...` | https://github.com/libimobiledevice/libimobiledevice | LGPL-2.1 | `afc-return-after-receive-error.patch`, `backup-activity-records.patch` |
 | libgeneral | `81e46367...` | https://github.com/tihmstar/libgeneral | LGPL-2.1 | 无 |
 | usbmuxd2 | `744c46fc...` | https://github.com/tihmstar/usbmuxd2 | LGPL-3.0 | `client-disconnect-exception.patch` |
-| netmuxd | `ac8da974...` | https://github.com/jkcoxson/netmuxd | LGPL-2.1-only | `observability.patch`, `heartbeat-reconnect-after-sleep.patch`, `restore-helper-binaries.patch` |
+| netmuxd | `ac8da974...` | https://github.com/jkcoxson/netmuxd | LGPL-2.1-only | `observability.patch`, `heartbeat-reconnect-after-sleep.patch`, `restore-helper-binaries.patch`, `address-change-generation.patch` |
 
 ### Patches
 
@@ -27,6 +27,7 @@ iOS Backup 的 Go 应用本身仅使用 Go 标准库，源码采用 `AGPL-3.0-on
 - **netmuxd/observability.patch** ：增加可观察性日志
 - **netmuxd/heartbeat-reconnect-after-sleep.patch** ：修复睡眠后心跳重连
 - **netmuxd/restore-helper-binaries.patch** ：恢复辅助二进制文件
+- **netmuxd/address-change-generation.patch**: Validate address changes and reject stale heartbeat generations.
 
 ## System libraries (Debian bookworm)
 

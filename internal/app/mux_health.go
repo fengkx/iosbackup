@@ -44,6 +44,7 @@ type connectionService struct {
 	attempts                                           []time.Time
 	backoff                                            int
 	configRestart                                      bool
+	deviceRecovery                                     bool
 }
 
 type connectionServiceDTO struct {
@@ -243,10 +244,12 @@ func (app *application) publishConnectionScan(backend int, result connectionScan
 			s.healthySince = result.completed
 		}
 		if result.completed.Sub(s.healthySince) >= time.Minute {
-			s.backoff = 0
+			if !s.deviceRecovery {
+				s.backoff = 0
+			}
 		}
 		s.lastSuccess = result.completed
-		if s.phase != "restarting" && !s.configRestart {
+		if s.phase != "restarting" && !s.configRestart && !s.deviceRecovery {
 			s.phase = "idle"
 			s.nextAttempt = time.Time{}
 		}
@@ -260,6 +263,9 @@ func (app *application) publishConnectionScan(backend int, result connectionScan
 		if s.code == "tool_unavailable" {
 			s.phase = "manual_required"
 		}
+	}
+	if s.deviceRecovery && result.err == nil {
+		s.health, s.code = "unhealthy", "device_query_failed"
 	}
 	app.connectionRevision++
 	revision := app.connectionRevision

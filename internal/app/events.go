@@ -152,6 +152,11 @@ func (app *application) buildStatusSnapshot() statusSnapshot {
 		if app.isDeviceRemovedUnsafe(udid) || app.deviceRemovalPending[udid] {
 			continue
 		}
+		// Keep background probes running, but do not advertise a failing session as usable.
+		if isNetworkConnection(d.Connection) && app.networkRecovery[udid].queryFailures >= networkQueryFailureLimit {
+			d = cloneDevice(d)
+			d.PresenceUnknown = true
+		}
 		operationState := app.deviceOperationStates[udid]
 		if operationState.PairingState == "" {
 			operationState.PairingState = pairingStateUnknown

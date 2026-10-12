@@ -7,17 +7,20 @@ import (
 )
 
 const (
-	networkRecoveryInterval = 15 * time.Second
-	networkRecoveryMaxDelay = 2 * time.Minute
-	networkAddressMaxAge    = 24 * time.Hour
+	networkRecoveryInterval  = 15 * time.Second
+	networkRecoveryMaxDelay  = 2 * time.Minute
+	networkAddressMaxAge     = 24 * time.Hour
+	networkQueryFailureLimit = 3
 )
 
 type networkRecoveryState struct {
-	ip           string
-	seen         time.Time
-	configuredIP string
-	nextAttempt  time.Time
-	delay        time.Duration
+	ip                   string
+	lastSeenInList       time.Time
+	lastConfirmedWorking time.Time
+	queryFailures        int
+	configuredIP         string
+	nextAttempt          time.Time
+	delay                time.Duration
 }
 
 // networkRecoveryLoop 独立于自动备份和浏览器刷新；手机恢复可访问后无需新的 mDNS 事件。
@@ -38,8 +41,8 @@ func (app *application) networkRecoveryLoop(ctx context.Context) {
 	}
 }
 
-// recoverNetworkDevices 只缓存成功注册的地址，不保存为手动 IP，也不直接设置在线状态。
-// 缓存最多保留一天；mDNS 后续发现新地址时替换它。失败按 15/30/60/120 秒退避。
+// Cache leases are renewed by successful device queries, never by list membership.
+// An observed address change invalidates the old lease until the new address works.
 func (app *application) recoverNetworkDevices(ctx context.Context, now time.Time) {
 	if ctx.Err() != nil || app.usesUSBMuxd2WiFi() || !app.networkRecoveryMu.TryLock() {
 		return
@@ -70,12 +73,17 @@ func (app *application) recoverNetworkDevices(ctx context.Context, now time.Time
 		}
 		if ip, exists := online[udid]; exists {
 			if net.ParseIP(ip) != nil {
-				state.ip, state.seen = ip, now
+				if state.ip != ip {
+					state.ip = ip
+					state.lastConfirmedWorking = time.Time{}
+					state.queryFailures = 0
+				}
+				state.lastSeenInList = now
 			}
 			state.delay, state.nextAttempt = 0, now.Add(networkRecoveryInterval)
 		} else if !app.deviceRemovalBusyUnsafe(udid) && !now.Before(state.nextAttempt) {
 			ip := cfg.NetworkAddress
-			if ip == "" && now.Sub(state.seen) < networkAddressMaxAge {
+			if ip == "" && !state.lastConfirmedWorking.IsZero() && now.Sub(state.lastConfirmedWorking) < networkAddressMaxAge {
 				ip = state.ip
 			}
 			if net.ParseIP(ip) != nil {
@@ -103,6 +111,13 @@ func (app *application) recoverNetworkDevices(ctx context.Context, now time.Time
 		app.addDebugLog(udid, "Wi-Fi 设备已不在注册表，尝试恢复连接")
 		err := app.callAddDeviceContext(ctx, udid, ip)
 		app.mu.Lock()
+		// Preserve observations made while the helper was running.
+		current := app.networkRecovery[udid]
+		if current.ip != state.ip || current.configuredIP != state.configuredIP {
+			app.mu.Unlock()
+			continue
+		}
+		state = current
 		if state.delay == 0 || err == nil {
 			state.delay = networkRecoveryInterval
 		} else {
@@ -115,4 +130,73 @@ func (app *application) recoverNetworkDevices(ctx context.Context, now time.Time
 		app.networkRecovery[udid] = state
 		app.mu.Unlock()
 	}
+}
+
+// Bind query results to both the mux process and the address observed before I/O.
+func (app *application) networkQueryObservation(d *device) (string, uint64) {
+	epoch := app.connectionEpoch(d)
+	if !isNetworkConnection(d.Connection) || app.usesUSBMuxd2WiFi() {
+		return "", epoch
+	}
+	ips, err := app.lookupNetworkIPs(app.rootCtx)
+	ip := ips[d.UDID]
+	if err != nil || net.ParseIP(ip) == nil {
+		return "", epoch
+	}
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	cfg := app.configs[d.UDID]
+	if cfg == nil || app.connectionEpochUnsafe(d) != epoch || app.deviceRemovalBlockedUnsafe(d.UDID) != nil {
+		return "", epoch
+	}
+	if app.networkRecovery == nil {
+		app.networkRecovery = make(map[string]networkRecoveryState)
+	}
+	state := app.networkRecovery[d.UDID]
+	if state.ip != ip || state.configuredIP != cfg.NetworkAddress {
+		state = networkRecoveryState{ip: ip, configuredIP: cfg.NetworkAddress}
+	}
+	state.lastSeenInList = time.Now()
+	app.networkRecovery[d.UDID] = state
+	return ip, epoch
+}
+
+func (app *application) recordNetworkQuery(d *device, ip string, epoch uint64, working bool, now time.Time) {
+	if !isNetworkConnection(d.Connection) || app.usesUSBMuxd2WiFi() || net.ParseIP(ip) == nil {
+		return
+	}
+	// A DHCP change during the command must not renew the previous address lease.
+	ips, err := app.lookupNetworkIPs(app.rootCtx)
+	if err != nil || ips[d.UDID] != ip {
+		return
+	}
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	cfg := app.configs[d.UDID]
+	state, exists := app.networkRecovery[d.UDID]
+	if !exists || cfg == nil || app.deviceRemovalBlockedUnsafe(d.UDID) != nil ||
+		state.ip != ip || state.configuredIP != cfg.NetworkAddress || app.connectionEpochUnsafe(d) != epoch {
+		return
+	}
+	if working {
+		state.lastConfirmedWorking = now
+		state.queryFailures = 0
+	} else {
+		state.queryFailures++
+	}
+	app.networkRecovery[d.UDID] = state
+	if state.queryFailures >= networkQueryFailureLimit {
+		// The recovery worker drains active tasks and applies the normal retry budget.
+		app.connectionServices[connectionWiFi].deviceRecovery = true
+		app.requestConnectionRefreshUnsafe()
+	}
+}
+
+func (app *application) unhealthyNetworkDevicesUnsafe() bool {
+	for udid, state := range app.networkRecovery {
+		if app.configs[udid] != nil && app.deviceRemovalBlockedUnsafe(udid) == nil && state.queryFailures >= networkQueryFailureLimit {
+			return true
+		}
+	}
+	return false
 }

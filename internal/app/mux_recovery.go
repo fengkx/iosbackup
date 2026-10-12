@@ -28,6 +28,9 @@ func (app *application) connectionAdmissionUnsafe(d *device) error {
 			backend = connectionWiFi
 		}
 		s := app.connectionServices[app.connectionBackend(backend)]
+		if backend == connectionWiFi && app.networkRecovery[d.UDID].queryFailures >= networkQueryFailureLimit {
+			return errConnectionUnavailable
+		}
 		if d.PresenceUnknown || (s.scan.sequence != 0 && (s.scan.err != nil || s.scan.generation != s.generation)) {
 			return errConnectionUnavailable
 		}
@@ -96,7 +99,7 @@ func (app *application) reserveConnectionRecovery(targets []int, manual bool) er
 		now := nowBeijing()
 		for _, target := range targets {
 			s := &app.connectionServices[target]
-			if !s.configRestart && (s.failures < 3 || s.code == "tool_unavailable" || now.Before(s.graceUntil) || now.Before(s.nextAttempt) || len(trimConnectionAttempts(s.attempts, now)) >= 3) {
+			if !s.configRestart && ((s.failures < 3 && !s.deviceRecovery) || s.code == "tool_unavailable" || now.Before(s.graceUntil) || now.Before(s.nextAttempt) || len(trimConnectionAttempts(s.attempts, now)) >= 3) {
 				return errConnectionUnavailable
 			}
 		}
@@ -131,7 +134,13 @@ func (app *application) dueConnectionRecovery(now time.Time) []int {
 			targets = append(targets, target)
 			continue
 		}
-		if s.failures < 3 || s.code == "tool_unavailable" || now.Before(s.graceUntil) {
+		if s.deviceRecovery && !app.unhealthyNetworkDevicesUnsafe() {
+			s.deviceRecovery = false
+			if s.phase == "waiting_busy" {
+				s.phase = "idle"
+			}
+		}
+		if (s.failures < 3 && !s.deviceRecovery) || s.code == "tool_unavailable" || now.Before(s.graceUntil) {
 			continue
 		}
 		if len(s.attempts) >= 3 {
@@ -195,9 +204,10 @@ func (app *application) executeConnectionRecovery(ctx context.Context, targets [
 		}
 		app.mu.RLock()
 		configRestart := app.connectionServices[target].configRestart
+		deviceRecovery := app.connectionServices[target].deviceRecovery && app.unhealthyNetworkDevicesUnsafe()
 		app.mu.RUnlock()
 		// 自动恢复先复核，忙期间服务自行恢复时不消耗额度。
-		if !manual && !configRestart {
+		if !manual && !configRestart && !deviceRecovery {
 			result := app.scanConnection(ctx, target, true)
 			if result.code == "tool_unavailable" {
 				app.mu.Lock()
@@ -217,6 +227,14 @@ func (app *application) executeConnectionRecovery(ctx context.Context, targets [
 		s := &app.connectionServices[target]
 		minimumGeneration := s.generation + 1
 		s.configRestart = false
+		s.deviceRecovery = false
+		if deviceRecovery {
+			// Require fresh failures after restart; keep only previously verified leases.
+			for udid, state := range app.networkRecovery {
+				state.queryFailures = 0
+				app.networkRecovery[udid] = state
+			}
+		}
 		if !manual {
 			s.attempts = append(trimConnectionAttempts(s.attempts, nowBeijing()), nowBeijing())
 		}

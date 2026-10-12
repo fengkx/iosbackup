@@ -170,6 +170,7 @@ WORKDIR /build
 COPY third_party/patches/netmuxd/observability.patch /build/patches/netmuxd-observability.patch
 COPY third_party/patches/netmuxd/heartbeat-reconnect-after-sleep.patch /build/patches/netmuxd-heartbeat-reconnect-after-sleep.patch
 COPY third_party/patches/netmuxd/restore-helper-binaries.patch /build/patches/netmuxd-restore-helper-binaries.patch
+COPY third_party/patches/netmuxd/address-change-generation.patch /build/patches/netmuxd-address-change-generation.patch
 COPY third_party/components.lock.json /build/iosbackup-lock/components.lock.json
 COPY third_party/netmuxd-cargo-licenses.tsv /build/iosbackup-lock/netmuxd-cargo-licenses.tsv
 COPY third_party/cargo-license-fallbacks.tsv /build/iosbackup-lock/cargo-license-fallbacks.tsv
@@ -188,6 +189,7 @@ RUN set -eu; \
     patch -p1 < /build/patches/netmuxd-observability.patch && \
     patch -p1 < /build/patches/netmuxd-heartbeat-reconnect-after-sleep.patch && \
     patch -p1 < /build/patches/netmuxd-restore-helper-binaries.patch && \
+    patch -p1 < /build/patches/netmuxd-address-change-generation.patch && \
     cargo fetch --locked && \
     cargo metadata --locked --format-version 1 > /build/netmuxd-metadata.json
 COPY scripts/collect_cargo_licenses.sh /build/iosbackup-lock/collect_cargo_licenses.sh

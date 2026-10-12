@@ -84,7 +84,7 @@ func TestNetworkRegistrationDoesNotOverlapReplayAndManualRequest(t *testing.T) {
 func newRecoveryFixture() *recoveryFixture {
 	f := &recoveryFixture{app: newApplication(), registered: map[string]string{}, reachable: true}
 	f.app.configs["PHONE"] = &backupConfig{UDID: "PHONE"}
-	f.app.devices["PHONE"] = &device{UDID: "PHONE"}
+	f.app.devices["PHONE"] = &device{UDID: "PHONE", Connection: connectionTypeDesc(connectTypeNetwork)}
 	f.app.networkIPLookup = func(context.Context) (map[string]string, error) {
 		result := make(map[string]string)
 		for udid, ip := range f.registered {
@@ -122,6 +122,7 @@ func TestNetworkRecoveryWithoutManualIP(t *testing.T) {
 	now := time.Now()
 	f.registered["PHONE"] = "192.0.2.11"
 	f.app.recoverNetworkDevices(context.Background(), now)
+	f.confirmWorking(now)
 	delete(f.registered, "PHONE") // 心跳超时，mDNS 没有新的 ServiceResolved 事件。
 	f.app.recoverNetworkDevices(context.Background(), now.Add(30*time.Second))
 	f.app.refreshPresence()
@@ -161,6 +162,7 @@ func TestNetworkRecoveryUsesNewlyDiscoveredAddress(t *testing.T) {
 	f.app.recoverNetworkDevices(context.Background(), now)
 	f.registered["PHONE"] = "192.0.2.22"
 	f.app.recoverNetworkDevices(context.Background(), now.Add(time.Minute))
+	f.confirmWorking(now)
 	delete(f.registered, "PHONE")
 	f.app.recoverNetworkDevices(context.Background(), now.Add(2*time.Minute))
 	if len(f.attempts) != 1 || f.attempts[0] != "192.0.2.22" {
@@ -175,6 +177,7 @@ func TestNetworkRecoverySkipsUnsafeCandidates(t *testing.T) {
 			now := time.Now()
 			f.registered["PHONE"] = "192.0.2.11"
 			f.app.recoverNetworkDevices(context.Background(), now)
+			f.confirmWorking(now)
 			delete(f.registered, "PHONE")
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -241,6 +244,7 @@ func TestNetworkRecoveryClearingManualIPDiscardsOldAddress(t *testing.T) {
 	f.app.configs["PHONE"].NetworkAddress = "192.0.2.11"
 	f.registered["PHONE"] = "192.0.2.11"
 	f.app.recoverNetworkDevices(context.Background(), now)
+	f.confirmWorking(now)
 	f.app.configs["PHONE"].NetworkAddress = ""
 	delete(f.registered, "PHONE")
 	f.app.recoverNetworkDevices(context.Background(), now.Add(time.Minute))
@@ -249,9 +253,194 @@ func TestNetworkRecoveryClearingManualIPDiscardsOldAddress(t *testing.T) {
 	}
 	f.registered["PHONE"] = "192.0.2.22"
 	f.app.recoverNetworkDevices(context.Background(), now.Add(2*time.Minute))
+	f.confirmWorking(now)
 	delete(f.registered, "PHONE")
 	f.app.recoverNetworkDevices(context.Background(), now.Add(3*time.Minute))
 	if f.registered["PHONE"] != "192.0.2.22" {
 		t.Fatal("清空 IP 后未恢复 mDNS 地址学习")
+	}
+}
+
+func (f *recoveryFixture) confirmWorking(now time.Time) {
+	d := f.app.devices["PHONE"]
+	ip, epoch := f.app.networkQueryObservation(d)
+	f.app.recordNetworkQuery(d, ip, epoch, true, now)
+}
+
+func TestNetworkRecoveryDHCPChange(t *testing.T) {
+	f := newRecoveryFixture()
+	now := time.Now()
+	f.registered["PHONE"] = "192.168.2.135"
+	f.app.recoverNetworkDevices(context.Background(), now)
+	f.confirmWorking(now)
+	delete(f.registered, "PHONE")
+	f.reachable = false
+	f.app.recoverNetworkDevices(context.Background(), now.Add(time.Hour))
+	if len(f.attempts) != 0 {
+		t.Fatal("unreachable old address must not be registered")
+	}
+	f.registered["PHONE"] = "192.168.2.134"
+	f.reachable = true
+	f.app.recoverNetworkDevices(context.Background(), now.Add(2*time.Hour))
+	if !f.app.networkRecovery["PHONE"].lastConfirmedWorking.IsZero() {
+		t.Fatal("a new address must not inherit the old address lease")
+	}
+	f.confirmWorking(now.Add(2 * time.Hour))
+	delete(f.registered, "PHONE")
+	f.app.recoverNetworkDevices(context.Background(), now.Add(3*time.Hour))
+	if len(f.attempts) != 1 || f.attempts[0] != "192.168.2.134" {
+		t.Fatalf("recovery used a stale address: %v", f.attempts)
+	}
+}
+
+func TestNetworkListDoesNotRenewVerifiedLease(t *testing.T) {
+	f := newRecoveryFixture()
+	now := time.Now()
+	f.registered["PHONE"] = "192.168.2.135"
+	f.app.recoverNetworkDevices(context.Background(), now)
+	f.confirmWorking(now)
+	later := now.Add(25 * time.Hour)
+	f.app.recoverNetworkDevices(context.Background(), later)
+	state := f.app.networkRecovery["PHONE"]
+	if !state.lastSeenInList.Equal(later) || !state.lastConfirmedWorking.Equal(now) {
+		t.Fatalf("list membership renewed the verified lease: %+v", state)
+	}
+	delete(f.registered, "PHONE")
+	f.app.recoverNetworkDevices(context.Background(), later.Add(time.Minute))
+	if len(f.attempts) != 0 {
+		t.Fatal("expired address was replayed")
+	}
+}
+
+func TestListedButUnreachableSchedulesControlledRecovery(t *testing.T) {
+	f := newRecoveryFixture()
+	now := time.Now()
+	f.registered["PHONE"] = "192.168.2.135"
+	f.app.recoverNetworkDevices(context.Background(), now)
+	f.app.refreshPresence()
+	f.confirmWorking(now)
+	base := f.app.cmdRunner
+	f.app.cmdRunner = func(ctx context.Context, name string, args, env []string) ([]byte, error) {
+		if name == cmdIdeviceInfo {
+			return nil, errors.New("exit status 255")
+		}
+		return base(ctx, name, args, env)
+	}
+	for i := 1; i <= networkQueryFailureLimit; i++ {
+		f.app.getDeviceInfo(f.app.devices["PHONE"])
+		f.app.refreshPresence()
+		due := f.app.dueConnectionRecovery(now)
+		if (len(due) != 0) != (i == networkQueryFailureLimit) {
+			t.Fatalf("unexpected recovery threshold at failure %d: %v", i, due)
+		}
+	}
+	snapshot := f.app.buildStatusSnapshot()
+	if len(snapshot.Devices) != 1 || snapshot.Devices[0].Conn != "unknown" || snapshot.Devices[0].OperationsAvailable {
+		t.Fatalf("unreachable device was advertised as usable: %+v", snapshot.Devices)
+	}
+	if err := f.app.connectionAdmissionUnsafe(f.app.devices["PHONE"]); !errors.Is(err, errConnectionUnavailable) {
+		t.Fatalf("unhealthy device admitted a new backup: %v", err)
+	}
+	if f.app.connectionServices[connectionWiFi].health != "unhealthy" {
+		t.Fatal("successful list query hid failed device sessions")
+	}
+	if !f.app.networkRecovery["PHONE"].lastConfirmedWorking.Equal(now) {
+		t.Fatal("failed queries renewed the lease")
+	}
+	f.app.backupInProgress["PHONE"] = true
+	if err := f.app.reserveConnectionRecovery([]int{connectionWiFi}, false); !errors.Is(err, errDeviceBusy) {
+		t.Fatalf("recovery must wait for active tasks: %v", err)
+	}
+	delete(f.app.backupInProgress, "PHONE")
+	f.app.connectionServices[connectionWiFi].attempts = []time.Time{now, now, now}
+	if due := f.app.dueConnectionRecovery(now); len(due) != 0 {
+		t.Fatal("device recovery bypassed the restart budget")
+	}
+}
+
+func TestNetworkQueryIgnoresStaleResults(t *testing.T) {
+	f := newRecoveryFixture()
+	now := time.Now()
+	f.registered["PHONE"] = "192.168.2.135"
+	f.app.recoverNetworkDevices(context.Background(), now)
+	d := f.app.devices["PHONE"]
+	ip, epoch := f.app.networkQueryObservation(d)
+	f.registered["PHONE"] = "192.168.2.134"
+	f.app.recoverNetworkDevices(context.Background(), now.Add(time.Minute))
+	f.app.recordNetworkQuery(d, ip, epoch, true, now)
+	if !f.app.networkRecovery["PHONE"].lastConfirmedWorking.IsZero() {
+		t.Fatal("old address result confirmed the new address")
+	}
+	ip, epoch = f.app.networkQueryObservation(d)
+	f.app.connectionProcessStarted(connectionWiFi)
+	for i := 0; i < networkQueryFailureLimit; i++ {
+		f.app.recordNetworkQuery(d, ip, epoch, false, now)
+	}
+	if f.app.connectionServices[connectionWiFi].deviceRecovery {
+		t.Fatal("old process failures scheduled a restart")
+	}
+}
+
+func TestNetworkQuerySuccessCancelsPendingRecovery(t *testing.T) {
+	f := newRecoveryFixture()
+	now := time.Now()
+	f.registered["PHONE"] = "192.168.2.134"
+	f.app.recoverNetworkDevices(context.Background(), now)
+	d := f.app.devices["PHONE"]
+	ip, epoch := f.app.networkQueryObservation(d)
+	for i := 0; i < networkQueryFailureLimit; i++ {
+		f.app.recordNetworkQuery(d, ip, epoch, false, now)
+	}
+	f.app.recordNetworkQuery(d, ip, epoch, true, now.Add(time.Minute))
+	if due := f.app.dueConnectionRecovery(now.Add(time.Minute)); len(due) != 0 {
+		t.Fatalf("working device should cancel pending recovery: %v", due)
+	}
+	if f.app.networkRecovery["PHONE"].queryFailures != 0 {
+		t.Fatal("query failures were not consecutive")
+	}
+}
+
+func TestNetworkDeviceRecoveryRestartsEvenWhenListWorks(t *testing.T) {
+	f := newRecoveryFixture()
+	f.registered["PHONE"] = "192.168.2.135"
+	now := time.Now()
+	f.app.recoverNetworkDevices(context.Background(), now)
+	d := f.app.devices["PHONE"]
+	ip, epoch := f.app.networkQueryObservation(d)
+	for i := 0; i < networkQueryFailureLimit; i++ {
+		f.app.recordNetworkQuery(d, ip, epoch, false, now)
+	}
+	f.app.muxProcFactory = func(ctx context.Context, _ string, _ ...string) muxProcess {
+		return &fakeMuxProc{ctx: ctx}
+	}
+	defer f.app.StopNetmuxd()
+	targets := f.app.dueConnectionRecovery(now)
+	if len(targets) != 1 || targets[0] != connectionWiFi {
+		t.Fatalf("expected Wi-Fi-only recovery: %v", targets)
+	}
+	if err := f.app.reserveConnectionRecovery(targets, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.executeConnectionRecovery(context.Background(), targets, false); err != nil {
+		t.Fatal(err)
+	}
+	f.app.mu.RLock()
+	defer f.app.mu.RUnlock()
+	s := f.app.connectionServices[connectionWiFi]
+	if s.generation == epoch || s.scan.generation != s.generation || len(s.attempts) != 1 || s.deviceRecovery {
+		t.Fatalf("list success incorrectly skipped device recovery: %+v", s)
+	}
+}
+
+func TestNetworkQueryCannotConfirmAddressChangedDuringCommand(t *testing.T) {
+	f := newRecoveryFixture()
+	f.registered["PHONE"] = "192.168.2.135"
+	d := f.app.devices["PHONE"]
+	ip, epoch := f.app.networkQueryObservation(d)
+	// netmuxd changes before Go's next recovery poll.
+	f.registered["PHONE"] = "192.168.2.134"
+	f.app.recordNetworkQuery(d, ip, epoch, true, time.Now())
+	if !f.app.networkRecovery["PHONE"].lastConfirmedWorking.IsZero() {
+		t.Fatal("successful query renewed a different address")
 	}
 }

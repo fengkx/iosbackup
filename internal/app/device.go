@@ -363,9 +363,11 @@ func (app *application) getDeviceInfo(device *device) {
 }
 
 func (app *application) getDeviceInfoInTask(device *device) {
+	ip, epoch := app.networkQueryObservation(device)
 	// 获取设备名称（短命令）
 	if output, err := app.runIdeviceCmd(app.rootCtx, cmdKindShort, device, cmdIdeviceInfo, "-k", "DeviceName"); err == nil {
 		deviceName := strings.TrimSpace(string(output))
+		app.recordNetworkQuery(device, ip, epoch, deviceName != "", time.Now())
 		if deviceName != "" && deviceName != device.Name {
 			device.Name = deviceName
 			app.addDebugLog(device.UDID, fmt.Sprintf("获取设备名称成功: %s", deviceName))
@@ -374,6 +376,9 @@ func (app *application) getDeviceInfoInTask(device *device) {
 		}
 	} else {
 		app.addWarnLog(device.UDID, fmt.Sprintf("获取设备名称失败: %v", err))
+		if app.rootCtx.Err() == nil {
+			app.recordNetworkQuery(device, ip, epoch, false, time.Now())
+		}
 	}
 
 	// 获取设备类型
